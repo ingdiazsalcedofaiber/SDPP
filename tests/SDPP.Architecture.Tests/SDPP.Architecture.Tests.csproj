@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="NetArchTest.Rules" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Referencing the outermost project of each module pulls in every layer's assembly so
+         NetArchTest can inspect the full dependency graph — see docs/01-architecture/solution-structure.md,
+         "Reglas de dependencia". -->
+    <ProjectReference Include="..\..\src\Modules\Documents\SDPP.Documents.Api\SDPP.Documents.Api.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Classification\SDPP.Classification.Api\SDPP.Classification.Api.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Audit\SDPP.Audit.Api\SDPP.Audit.Api.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Identity\SDPP.Identity.Api\SDPP.Identity.Api.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Signature\SDPP.Signature.Api\SDPP.Signature.Api.csproj" />
+  </ItemGroup>
+
+</Project>

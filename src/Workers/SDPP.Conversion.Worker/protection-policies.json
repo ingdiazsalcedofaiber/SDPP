@@ -1,0 +1,79 @@
+{
+  "ProtectionPolicies": {
+    "Levels": {
+      "Publica": {
+        "ApplyWatermark": false,
+        "ApplyFooter": false,
+        "ApplyHeader": false,
+        "EmbedMetadata": false,
+        "SignIntegrity": false,
+        "BlockPrintAndCopy": false,
+        "BlockEditableConversion": false,
+        "NotifyAdmin": false
+      },
+      "UsoInterno": {
+        "ApplyWatermark": false,
+        "ApplyFooter": true,
+        "ApplyHeader": false,
+        "EmbedMetadata": true,
+        "SignIntegrity": false,
+        "BlockPrintAndCopy": false,
+        "BlockEditableConversion": false,
+        "NotifyAdmin": false,
+        "FooterTemplate": "SDPP · Uso Interno · {date} · Auditoría {auditId}"
+      },
+      "Privada": {
+        "ApplyWatermark": false,
+        "ApplyFooter": true,
+        "ApplyHeader": false,
+        "EmbedMetadata": true,
+        "SignIntegrity": false,
+        "BlockPrintAndCopy": false,
+        "BlockEditableConversion": false,
+        "NotifyAdmin": false,
+        "FooterTemplate": "SDPP · Privada · {user} · {date} · Auditoría {auditId}"
+      },
+      "Confidencial": {
+        "ApplyWatermark": true,
+        "ApplyFooter": true,
+        "ApplyHeader": false,
+        "EmbedMetadata": true,
+        "SignIntegrity": false,
+        "BlockPrintAndCopy": false,
+        "BlockEditableConversion": false,
+        "NotifyAdmin": false,
+        "WatermarkTemplate": "CONFIDENCIAL · {user} · {area} · {date} · {ip} · Auditoría {auditId}",
+        "FooterTemplate": "SDPP · Confidencial · {user} · {date} · Auditoría {auditId}",
+        "Watermark": { "ColorHex": "#C00000", "Opacity": 0.16, "FontSize": 22, "AngleDegrees": -45 }
+      },
+      "Restringida": {
+        "ApplyWatermark": true,
+        "ApplyFooter": true,
+        "ApplyHeader": true,
+        "EmbedMetadata": true,
+        "SignIntegrity": false,
+        "BlockPrintAndCopy": true,
+        "BlockEditableConversion": false,
+        "NotifyAdmin": false,
+        "WatermarkTemplate": "RESTRINGIDO · {user} · {area} · {date} · {ip} · Auditoría {auditId}",
+        "FooterTemplate": "SDPP · Restringido · {user} · {date} · Auditoría {auditId}",
+        "HeaderTemplate": "SDPP · Documento Restringido · Categoría: {category}",
+        "Watermark": { "ColorHex": "#C00000", "Opacity": 0.20, "FontSize": 24, "AngleDegrees": -45 }
+      },
+      "Secreta": {
+        "ApplyWatermark": true,
+        "ApplyFooter": true,
+        "ApplyHeader": true,
+        "EmbedMetadata": true,
+        "SignIntegrity": true,
+        "BlockPrintAndCopy": true,
+        "BlockEditableConversion": true,
+        "NotifyAdmin": true,
+        "WatermarkTemplate": "ALTAMENTE SENSIBLE · {user} · {area} · {date} · {ip} · Auditoría {auditId}",
+        "FooterTemplate": "SDPP · Altamente Sensible · {user} · {date} · Auditoría {auditId} · Puntuación {riskScore}",
+        "HeaderTemplate": "SDPP · Documento Altamente Sensible · Categoría: {category}",
+        "Watermark": { "ColorHex": "#8B0000", "Opacity": 0.24, "FontSize": 26, "AngleDegrees": -45 }
+      }
+    }
+  }
+}

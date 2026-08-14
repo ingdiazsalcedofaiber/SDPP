@@ -1,0 +1,28 @@
+## .NET
+bin/
+obj/
+*.user
+.vs/
+
+## Node / Frontend
+node_modules/
+dist/
+.vite/
+
+## Env / secrets
+.env
+.env.*
+!.env.example
+*.pfx
+*.pem
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Logs
+*.log
+logs/
+
+## IDE
+.idea/

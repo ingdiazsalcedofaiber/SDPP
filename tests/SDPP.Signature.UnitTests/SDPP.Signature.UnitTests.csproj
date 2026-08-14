@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="FluentAssertions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BuildingBlocks\SDPP.BuildingBlocks.Domain\SDPP.BuildingBlocks.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Signature\SDPP.Signature.Domain\SDPP.Signature.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Signature\SDPP.Signature.Application\SDPP.Signature.Application.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Signature\SDPP.Signature.Infrastructure\SDPP.Signature.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

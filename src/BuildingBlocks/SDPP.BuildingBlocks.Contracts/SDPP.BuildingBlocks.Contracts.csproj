@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- Pure DTOs shared as the "published language" between bounded contexts (see
+         docs/02-domain/domain-model.md §1). No dependency on Domain/Application on purpose:
+         any module can reference this without pulling in another module's internals. -->
+  </ItemGroup>
+
+</Project>

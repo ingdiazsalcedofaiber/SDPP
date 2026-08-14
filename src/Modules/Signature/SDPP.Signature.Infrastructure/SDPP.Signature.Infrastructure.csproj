@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <PackageReference Include="MassTransit.RabbitMQ" />
+    <PackageReference Include="PdfSharp" />
+    <PackageReference Include="QRCoder" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The real TICs corporate logo (same file as frontend/sdpp-web/public/logo-tics.png) —
+         printed on the completion certificate, never a redrawn approximation. -->
+    <None Include="Assets\logo-tics.png" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The official Clinaltec "APROBADO GERENCIA LEGAL" stamp artwork (same file as
+         frontend/sdpp-web/public/sello.png), supplied by Gerencia Legal — embedded as-is on every
+         page instead of a redrawn approximation (see DrawLegalApprovalStamp). -->
+    <None Include="Assets\sello.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SDPP.Signature.Application\SDPP.Signature.Application.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\SDPP.BuildingBlocks.Infrastructure\SDPP.BuildingBlocks.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\SDPP.BuildingBlocks.Contracts\SDPP.BuildingBlocks.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

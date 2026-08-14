@@ -1,0 +1,259 @@
+name: sdpp
+
+# Local development environment only — mirrors the on-prem topology described in
+# docs/07-operations/kubernetes-architecture.md without Kubernetes. Never use these credentials
+# or this compose file as-is in production; see docs/07-operations/kubernetes-architecture.md and
+# docs/07-operations/backup-recovery-plan.md for the real deployment/secret-management story.
+
+# Every service below shares this exact signing key/issuer/audience — it's how a JWT that
+# identity-api issues after a Google login validates the same way on all 4 downstream services
+# (see BuildingBlocks.Infrastructure.Security.AddSdppCookieJwtBearer). Dev-only secret; production
+# must inject this via a real secret store like every other __set-via-secret__ value here.
+x-sdpp-auth-env: &sdpp-auth-env
+  Authentication__Issuer: "sdpp-identity"
+  Authentication__Audience: "sdpp-platform"
+  Authentication__SigningKey: "sdpp-dev-signing-key-change-in-production-32bytes-min"
+  Redis__ConnectionString: "redis:6379"
+  # Shared secret for service-to-service calls that have no forwardable user session — the case
+  # introduced by Signature.Api's public/anonymous signer-access endpoints (an external recipient
+  # with no SDPP account calling Documents.Api's internal endpoints through Signature.Api). See
+  # InternalServiceKeyFilter/InternalServiceKeyHandler. Dev-only placeholder, rotate for production.
+  Services__InternalApiKey: "sdpp-internal-service-dev-key-change-in-production"
+
+services:
+  sql-server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Sdpp!DevOnly123"
+    ports: ["14330:1433"]
+    volumes: [sql-data:/var/opt/mssql]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: sdpp_dev
+      RABBITMQ_DEFAULT_PASS: sdpp_dev_secret
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # management UI
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    # Host port shifted to 16379 — 6379/6380 were both already bound on this machine (one by an
+    # unrelated project, the other by a stale Docker Desktop port-forward). Container-to-container
+    # traffic still uses "redis:6379" on the internal network.
+    ports: ["16379:6379"]
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: sdpp_dev
+      MINIO_ROOT_PASSWORD: sdpp_dev_secret
+      # Single-key auto-encryption so SSE-S3 (the x-amz-server-side-encryption: AES256 header
+      # Documents.Infrastructure sends on every upload, see docs/00-overview.md §4.1) actually
+      # works without standing up a full external KMS. Dev-only key — production uses a real KMS
+      # per docs/07-operations/kubernetes-architecture.md.
+      MINIO_KMS_SECRET_KEY: "sdpp-dev-key:TZxDsPvD03iiQU9AJYTb+c0x5XibtSNPtWbcxzSyK3A="
+    # Host ports shifted to 9010/9011 — 9000/9001 are already bound by an unrelated project's
+    # stack. Other SDPP containers still reach this over the internal network as "minio:9000".
+    ports:
+      - "9010:9000" # S3 API
+      - "9011:9001" # console
+    volumes: [minio-data:/data]
+
+  clamav:
+    image: clamav/clamav:stable
+    ports: ["3310:3310"]
+
+  seq:
+    image: datalust/seq:latest
+    environment:
+      ACCEPT_EULA: "Y"
+      # Dev-only convenience — Seq now refuses to start without an admin password or an explicit
+      # opt-out. Never do this outside a local/throwaway environment.
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "True"
+    ports: ["5341:80"]
+
+  documents-api:
+    build:
+      context: ../..
+      dockerfile: src/Modules/Documents/SDPP.Documents.Api/Dockerfile
+    environment:
+      <<: *sdpp-auth-env
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DocumentsDb: "Server=sql-server,1433;Database=SDPP_Documents;User Id=sa;Password=Sdpp!DevOnly123;TrustServerCertificate=True"
+      ObjectStorage__Endpoint: "minio:9000"
+      ObjectStorage__AccessKey: "sdpp_dev"
+      ObjectStorage__SecretKey: "sdpp_dev_secret"
+      ClamAv__Host: "clamav"
+      RabbitMq__Host: "rabbitmq"
+      RabbitMq__Username: "sdpp_dev"
+      RabbitMq__Password: "sdpp_dev_secret"
+      Services__ClassificationApi: "http://classification-api:8080"
+    ports: ["5081:8080"]
+    depends_on:
+      sql-server: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      minio: { condition: service_started }
+      redis: { condition: service_started }
+
+  classification-api:
+    build:
+      context: ../..
+      dockerfile: src/Modules/Classification/SDPP.Classification.Api/Dockerfile
+    environment:
+      <<: *sdpp-auth-env
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__ClassificationDb: "Server=sql-server,1433;Database=SDPP_Classification;User Id=sa;Password=Sdpp!DevOnly123;TrustServerCertificate=True"
+      RabbitMq__Host: "rabbitmq"
+      RabbitMq__Username: "sdpp_dev"
+      RabbitMq__Password: "sdpp_dev_secret"
+      Services__DocumentsApi: "http://documents-api:8080"
+    ports: ["5082:8080"]
+    depends_on:
+      sql-server: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  audit-api:
+    build:
+      context: ../..
+      dockerfile: src/Modules/Audit/SDPP.Audit.Api/Dockerfile
+    environment:
+      <<: *sdpp-auth-env
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__AuditDb: "Server=sql-server,1433;Database=SDPP_Audit;User Id=sa;Password=Sdpp!DevOnly123;TrustServerCertificate=True"
+      RabbitMq__Host: "rabbitmq"
+      RabbitMq__Username: "sdpp_dev"
+      RabbitMq__Password: "sdpp_dev_secret"
+    ports: ["5083:8080"]
+    depends_on:
+      sql-server: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  signature-api:
+    build:
+      context: ../..
+      dockerfile: src/Modules/Signature/SDPP.Signature.Api/Dockerfile
+    environment:
+      <<: *sdpp-auth-env
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__SignatureDb: "Server=sql-server,1433;Database=SDPP_Signature;User Id=sa;Password=Sdpp!DevOnly123;TrustServerCertificate=True"
+      RabbitMq__Host: "rabbitmq"
+      RabbitMq__Username: "sdpp_dev"
+      RabbitMq__Password: "sdpp_dev_secret"
+      Services__DocumentsApi: "http://documents-api:8080"
+      Services__IdentityApi: "http://identity-api:8080"
+      Services__AuditApi: "http://audit-api:8080"
+      PublicWebBaseUrl: "http://localhost:5173"
+      # AES-256-GCM key protecting SDPP's own ECDSA P-256 platform signing key at rest — same
+      # pattern/shape as Identity__MfaEncryptionKey (AesMfaSecretProtector), 32 bytes.
+      Signature__KeyEncryptionKey: "sdpp-sig-dev-key-0123456789abcde"
+    ports: ["5085:8080"]
+    depends_on:
+      sql-server: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis: { condition: service_started }
+      identity-api: { condition: service_started }
+      audit-api: { condition: service_started }
+
+  identity-api:
+    build:
+      context: ../..
+      dockerfile: src/Modules/Identity/SDPP.Identity.Api/Dockerfile
+    environment:
+      <<: *sdpp-auth-env
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__IdentityDb: "Server=sql-server,1433;Database=SDPP_Identity;User Id=sa;Password=Sdpp!DevOnly123;TrustServerCertificate=True"
+      RabbitMq__Host: "rabbitmq"
+      RabbitMq__Username: "sdpp_dev"
+      RabbitMq__Password: "sdpp_dev_secret"
+      # Google Cloud Console → OAuth Client ID (Web application) — see the setup guide. Also set
+      # in frontend/sdpp-web/.env.local as VITE_GOOGLE_CLIENT_ID with the SAME value.
+      Identity__GoogleClientId: "658889587749-1pa2ihq4ip3no6i2eecnn96qpsa6jbi7.apps.googleusercontent.com"
+      # Your real Google account email — grants the Administrador role automatically on first
+      # login so the admin panel isn't unreachable from a cold start.
+      Identity__BootstrapAdminEmails__0: "seguridad.informacion@clinaltec.com.co"
+      Identity__AllowDevDomainOverride: "true"
+      Identity__SeedAllowedDomains__0__Domain: "sdpp.local"
+      Identity__SeedAllowedDomains__0__IsDevOnly: "false"
+      Identity__SeedAllowedDomains__1__Domain: "gmail.com"
+      Identity__SeedAllowedDomains__1__IsDevOnly: "true"
+      Identity__SeedAllowedDomains__2__Domain: "clinaltec.com.co"
+      Identity__SeedAllowedDomains__2__IsDevOnly: "false"
+      # AES-256 key (exactly 32 bytes) that encrypts TOTP secrets at rest — dev-only placeholder,
+      # rotate for a real deployment (see IMfaSecretProtector doc comment for why this isn't
+      # Data Protection API instead).
+      Identity__MfaEncryptionKey: "sdpp-mfa-dev-key-0123456789abcde"
+    ports: ["5084:8080"]
+    depends_on:
+      sql-server: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      redis: { condition: service_started }
+
+  conversion-worker:
+    build:
+      context: ../..
+      dockerfile: src/Workers/SDPP.Conversion.Worker/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__DocumentsDb: "Server=sql-server,1433;Database=SDPP_Documents;User Id=sa;Password=Sdpp!DevOnly123;TrustServerCertificate=True"
+      ObjectStorage__Endpoint: "minio:9000"
+      ObjectStorage__AccessKey: "sdpp_dev"
+      ObjectStorage__SecretKey: "sdpp_dev_secret"
+      ClamAv__Host: "clamav"
+      RabbitMq__Host: "rabbitmq"
+      RabbitMq__Username: "sdpp_dev"
+      RabbitMq__Password: "sdpp_dev_secret"
+      Services__ClassificationApi: "http://classification-api:8080"
+      # Dev-only HMAC key for the internal tamper-evidence signature ProtectionEngine stamps onto
+      # protected outputs (see docs on protección automática — this is NOT a legal X.509 signature).
+      # Production must inject this via a real secret store, same as the other __set-via-secret__ values.
+      Protection__HmacSecretKey: "sdpp-dev-protection-hmac-key-change-in-production"
+    depends_on:
+      sql-server: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+      minio: { condition: service_started }
+
+  gateway:
+    build:
+      context: ../..
+      dockerfile: src/Gateway/SDPP.Gateway/Dockerfile
+    environment:
+      <<: *sdpp-auth-env
+      ASPNETCORE_ENVIRONMENT: Development
+      ReverseProxy__Clusters__documents-cluster__Destinations__d1__Address: "http://documents-api:8080"
+      ReverseProxy__Clusters__classification-cluster__Destinations__d1__Address: "http://classification-api:8080"
+      ReverseProxy__Clusters__audit-cluster__Destinations__d1__Address: "http://audit-api:8080"
+      ReverseProxy__Clusters__identity-cluster__Destinations__d1__Address: "http://identity-api:8080"
+      ReverseProxy__Clusters__signature-cluster__Destinations__d1__Address: "http://signature-api:8080"
+    ports: ["5080:8080"]
+    depends_on: [documents-api, classification-api, audit-api, identity-api, signature-api]
+
+  web:
+    build:
+      context: ../../frontend/sdpp-web
+    environment:
+      # Baked in at build time by Vite; for a real multi-environment image, prefer runtime
+      # config injection (e.g. an entrypoint script templating a config.js) over rebuilding.
+      VITE_API_BASE_URL: "http://localhost:5080"
+      VITE_GOOGLE_CLIENT_ID: "658889587749-1pa2ihq4ip3no6i2eecnn96qpsa6jbi7.apps.googleusercontent.com"
+    ports: ["5090:8080"]
+    depends_on: [gateway]
+
+volumes:
+  sql-data:
+  minio-data:

@@ -1,0 +1,12 @@
+<svg width="140" height="140" viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sdppSwoosh" x1="70" y1="15" x2="70" y2="125" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#14A89C" />
+      <stop offset="0.5" stop-color="#F5821F" />
+      <stop offset="1" stop-color="#D6217A" />
+    </linearGradient>
+  </defs>
+  <path d="M 100.9,33.2 A 48,48 0 1 0 100.9,106.8" stroke="url(#sdppSwoosh)" stroke-width="16" stroke-linecap="round" fill="none" />
+  <path d="M 100.9,33.2 L 119,21 L 123,36 Z" fill="#14A89C" />
+  <path d="M 100.9,106.8 L 123,117 L 109,129 Z" fill="#D6217A" />
+</svg>

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- Needed for HttpContext/IApplicationBuilder/middleware/JwtBearer types used by the shared
+         cookie-JWT-auth, CSRF and ICurrentActor helpers below — this stays a plain class library
+         (not Sdk.Web) so every module Api project can reference it without pulling in a second
+         ASP.NET Core hosting model. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="MassTransit" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="StackExchange.Redis" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SDPP.BuildingBlocks.Domain\SDPP.BuildingBlocks.Domain.csproj" />
+    <ProjectReference Include="..\SDPP.BuildingBlocks.Application\SDPP.BuildingBlocks.Application.csproj" />
+  </ItemGroup>
+
+</Project>

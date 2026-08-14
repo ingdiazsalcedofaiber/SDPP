@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SDPP.Identity.Domain\SDPP.Identity.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\SDPP.BuildingBlocks.Application\SDPP.BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\SDPP.BuildingBlocks.Contracts\SDPP.BuildingBlocks.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

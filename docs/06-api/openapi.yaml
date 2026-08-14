@@ -1,0 +1,401 @@
+openapi: 3.0.3
+info:
+  title: SDPP - Secure Document Processing Platform API
+  description: >
+    API interna corporativa para conversión, clasificación y auditoría de documentos.
+    Uso exclusivo dentro de la red corporativa (intranet). No se debe exponer a Internet.
+  version: "1.0.0"
+  contact:
+    name: Equipo de Plataforma SDPP
+servers:
+  - url: https://sdpp.intranet.corp/api/v1
+    description: Ambiente productivo (intranet)
+  - url: https://sdpp-staging.intranet.corp/api/v1
+    description: Staging
+
+security:
+  - oidc: []
+
+tags:
+  - name: Documents
+  - name: Conversions
+  - name: Classification
+  - name: Audit
+  - name: Approvals
+
+paths:
+  /documents:
+    post:
+      tags: [Documents]
+      summary: Sube un nuevo documento
+      security: [{ oidc: [documents.write] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "201":
+          description: Documento subido, inspección automática iniciada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /documents/{documentId}:
+    get:
+      tags: [Documents]
+      summary: Obtiene metadata de un documento (nunca el binario)
+      security: [{ oidc: [documents.read] }]
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Document" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /documents/{documentId}/content:
+    get:
+      tags: [Documents]
+      summary: Descarga el contenido binario del documento (auditado)
+      security: [{ oidc: [documents.read] }]
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: Binario del documento
+          content:
+            application/octet-stream: {}
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: El documento aún está en inspección o bloqueado
+
+  /documents/{documentId}/conversions:
+    post:
+      tags: [Conversions]
+      summary: Solicita una conversión/operación sobre un documento
+      security: [{ oidc: [documents.convert] }]
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateConversionRequest" }
+      responses:
+        "201":
+          description: Job creado y encolado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversionJob" }
+        "202":
+          description: Job creado, pendiente de aprobación
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversionJob" }
+        "403":
+          description: Bloqueado por política de clasificación
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /documents/batch:
+    post:
+      tags: [Conversions]
+      summary: Conversión masiva / por lotes (US-110)
+      security: [{ oidc: [documents.convert] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateBatchConversionRequest" }
+      responses:
+        "202":
+          description: Lote aceptado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BatchAccepted" }
+
+  /conversions/{jobId}:
+    get:
+      tags: [Conversions]
+      summary: Consulta el estado de un job de conversión
+      security: [{ oidc: [documents.read] }]
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConversionJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /conversions/{jobId}/approve:
+    post:
+      tags: [Approvals]
+      summary: Aprueba un job pendiente de autorización (Supervisor)
+      security: [{ oidc: [approvals.decide] }]
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200": { description: Aprobado }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: "El job no está en estado AwaitingApproval" }
+
+  /conversions/{jobId}/reject:
+    post:
+      tags: [Approvals]
+      summary: Rechaza un job pendiente de autorización (Supervisor)
+      security: [{ oidc: [approvals.decide] }]
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [comment]
+              properties:
+                comment: { type: string, minLength: 10 }
+      responses:
+        "200": { description: Rechazado }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /classification/inspections/{documentId}:
+    get:
+      tags: [Classification]
+      summary: Resultado de inspección automática de un documento
+      security: [{ oidc: [documents.read] }]
+      parameters:
+        - $ref: "#/components/parameters/DocumentId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InspectionResult" }
+
+  /audit/records:
+    get:
+      tags: [Audit]
+      summary: Consulta registros de auditoría (solo Auditor/Administrador)
+      security: [{ oidc: [audit.query] }]
+      parameters:
+        - name: documentId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: userId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: eventType
+          in: query
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, default: 25, maximum: 100 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chainValid: { type: boolean }
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AuditRecord" }
+
+components:
+  securitySchemes:
+    oidc:
+      type: openIdConnect
+      openIdConnectUrl: https://idp.intranet.corp/.well-known/openid-configuration
+
+  parameters:
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    ValidationError:
+      description: Error de validación (RFC 9457 Problem Details)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    Forbidden:
+      description: No autorizado (RBAC/ABAC)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/ProblemDetails" }
+    PayloadTooLarge:
+      description: Archivo excede el tamaño máximo permitido
+    UnsupportedMediaType:
+      description: Tipo de archivo no soportado (validado por magic bytes)
+
+  schemas:
+    ProblemDetails:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        traceId: { type: string }
+
+    ClassificationLevel:
+      type: string
+      enum: [Publica, UsoInterno, Privada, Confidencial, Restringida, Secreta]
+
+    Document:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        originalFileName: { type: string }
+        contentType: { type: string }
+        sizeBytes: { type: integer, format: int64 }
+        sha256Hash: { type: string }
+        classification: { $ref: "#/components/schemas/ClassificationLevel" }
+        classificationSource: { type: string, enum: [Manual, Automatic, Hybrid] }
+        status:
+          type: string
+          enum: [Uploaded, Inspecting, Blocked, Ready, Archived, PendingDeletion, Deleted]
+        pageCount: { type: integer, nullable: true }
+        createdAtUtc: { type: string, format: date-time }
+
+    ProcessingRequestForm:
+      type: object
+      required:
+        [reason, project, area, process, justification, retention, declaredClassification, destination]
+      properties:
+        reason: { type: string }
+        project: { type: string }
+        area: { type: string }
+        process: { type: string }
+        client: { type: string, nullable: true }
+        caseNumber: { type: string, nullable: true }
+        justification: { type: string, minLength: 20 }
+        retention:
+          type: string
+          enum: [Days30, Days90, Days180, Days365, Permanent, Custom]
+        declaredClassification: { $ref: "#/components/schemas/ClassificationLevel" }
+        destination:
+          type: string
+          enum: [UsoInterno, EnvioCliente, EnvioProveedor, RepositorioLegal, ArchivoHistorico, Otro]
+
+    CreateConversionRequest:
+      type: object
+      required: [operationType, form]
+      properties:
+        operationType:
+          type: string
+          enum:
+            [WordToPdf, ExcelToPdf, PptToPdf, ImageToPdf, PdfToWord, PdfToExcel, PdfToImage,
+             PdfToPpt, Merge, Split, Compress, Ocr, Watermark, PageNumbering, Rotate,
+             DigitalSign, DeletePages, ReorderPages, Protect, Unlock]
+        form: { $ref: "#/components/schemas/ProcessingRequestForm" }
+        operationParameters:
+          type: object
+          description: Parámetros específicos de la operación (rango de páginas, contraseña, texto de marca de agua, etc.)
+          additionalProperties: true
+
+    CreateBatchConversionRequest:
+      type: object
+      required: [documentIds, operationType, form]
+      properties:
+        documentIds:
+          type: array
+          items: { type: string, format: uuid }
+        operationType: { type: string }
+        form: { $ref: "#/components/schemas/ProcessingRequestForm" }
+
+    BatchAccepted:
+      type: object
+      properties:
+        batchId: { type: string, format: uuid }
+        jobCount: { type: integer }
+
+    ConversionJob:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        documentId: { type: string, format: uuid }
+        operationType: { type: string }
+        status:
+          type: string
+          enum: [PendingForm, Queued, Inspecting, Approved, AwaitingApproval, Rejected, Processing, Completed, Failed]
+        engineUsed: { type: string, nullable: true }
+        durationMs: { type: integer, nullable: true }
+        outputDocumentId: { type: string, format: uuid, nullable: true }
+        errorDetail: { type: string, nullable: true }
+        createdAtUtc: { type: string, format: date-time }
+
+    Finding:
+      type: object
+      properties:
+        detectorId: { type: string }
+        category:
+          type: string
+          enum: [PII, Financial, Medical, Legal, SourceCode, IntellectualProperty, Credentials, Strategic]
+        severity: { type: string, enum: [Info, Low, Medium, High, Critical] }
+        matchCount: { type: integer }
+        location: { type: string }
+        ruleVersion: { type: string }
+
+    InspectionResult:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        documentId: { type: string, format: uuid }
+        suggestedClassification: { $ref: "#/components/schemas/ClassificationLevel" }
+        finalClassification: { $ref: "#/components/schemas/ClassificationLevel" }
+        requiresManualReview: { type: boolean }
+        findings:
+          type: array
+          items: { $ref: "#/components/schemas/Finding" }
+
+    AuditRecord:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        occurredAtUtc: { type: string, format: date-time }
+        eventType: { type: string }
+        actorUserId: { type: string, format: uuid }
+        actorFullName: { type: string }
+        actorEmail: { type: string }
+        actorIp: { type: string }
+        subjectDocumentId: { type: string, format: uuid, nullable: true }
+        recordHash: { type: string }

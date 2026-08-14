@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Lets SDPP.Signature.UnitTests exercise EnvelopeAuthorization directly (internal — no other
+         module or external caller should ever depend on it, only tests). -->
+    <InternalsVisibleTo Include="SDPP.Signature.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SDPP.Signature.Domain\SDPP.Signature.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\SDPP.BuildingBlocks.Application\SDPP.BuildingBlocks.Application.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\SDPP.BuildingBlocks.Contracts\SDPP.BuildingBlocks.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

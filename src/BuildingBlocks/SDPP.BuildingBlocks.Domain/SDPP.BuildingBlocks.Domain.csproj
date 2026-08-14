@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <!-- No external dependencies: the domain layer must remain framework-agnostic. -->
+  </ItemGroup>
+
+</Project>

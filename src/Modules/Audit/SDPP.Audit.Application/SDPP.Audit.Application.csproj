@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SDPP.Audit.Domain\SDPP.Audit.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\SDPP.BuildingBlocks.Application\SDPP.BuildingBlocks.Application.csproj" />
+  </ItemGroup>
+
+</Project>

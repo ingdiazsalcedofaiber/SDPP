@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="MassTransit.RabbitMQ" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SDPP.Audit.Application\SDPP.Audit.Application.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\SDPP.BuildingBlocks.Contracts\SDPP.BuildingBlocks.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>
