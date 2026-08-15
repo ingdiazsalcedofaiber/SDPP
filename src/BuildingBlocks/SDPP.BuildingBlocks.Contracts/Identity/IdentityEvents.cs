@@ -32,3 +32,13 @@ public sealed record UserRolesChangedV1(
     string Email,
     IReadOnlyList<string> Roles,
     Guid ChangedByUserId) : IIntegrationEvent;
+
+/// <summary>Published on every explicit logout (session revoked + access token jti blocklisted) —
+/// LogoutHandler previously did neither of these two things: publish an event, at all.</summary>
+public sealed record SessionLoggedOutV1(
+    Guid EventId,
+    DateTime OccurredAtUtc,
+    Guid UserId,
+    string Email,
+    string? IpAddress,
+    string? UserAgent) : IIntegrationEvent;

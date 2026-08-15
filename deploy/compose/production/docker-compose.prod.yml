@@ -1,0 +1,147 @@
+name: sdpp
+
+# Production overlay — use together with the base file, never alone:
+#
+#   docker compose -f ../docker-compose.yml -f docker-compose.prod.yml --env-file .env up -d
+#
+# What this changes vs. the base (dev) file:
+#   1. Every credential becomes ${VAR} read from .env (git-ignored — see .env.example next to this
+#      file) instead of a literal value baked into the compose file.
+#   2. Every internal-only service (SQL Server, RabbitMQ, Redis, MinIO, ClamAV, Seq) stops
+#      publishing a host port at all — reachable only on the internal Docker network, never from
+#      the Windows Server's own network interface, let alone the intranet (rule: NO exponer SQL
+#      Server / puertos internos innecesariamente).
+#   3. gateway and web bind to 127.0.0.1 only, not 0.0.0.0 — Apache (running natively on the same
+#      Windows Server, see deploy/apache/sdpp.conf) is the only thing that reaches them, over
+#      loopback; nothing on the wider intranet can hit port 5080/5090 directly.
+#
+# What this deliberately does NOT change: image builds, healthchecks, dependency graph, volumes —
+# all identical to dev, because the whole point of this overlay is "same tested topology, different
+# secrets and network exposure," not a parallel deployment nobody has actually run before.
+
+x-sdpp-auth-env: &sdpp-auth-env
+  Authentication__Issuer: "sdpp-identity"
+  Authentication__Audience: "sdpp-platform"
+  Authentication__SigningKey: ${SDPP_JWT_SIGNING_KEY:?Debes definir SDPP_JWT_SIGNING_KEY en .env}
+  Redis__ConnectionString: "redis:6379"
+  Services__InternalApiKey: ${SDPP_INTERNAL_API_KEY:?Debes definir SDPP_INTERNAL_API_KEY en .env}
+
+services:
+  sql-server:
+    environment:
+      MSSQL_SA_PASSWORD: ${SDPP_SA_PASSWORD:?Debes definir SDPP_SA_PASSWORD en .env}
+    ports: []
+
+  sql-init:
+    entrypoint: ["/opt/mssql-tools18/bin/sqlcmd", "-S", "sql-server,1433", "-U", "sa", "-P", "${SDPP_SA_PASSWORD:?Debes definir SDPP_SA_PASSWORD en .env}", "-C", "-i", "/sql-init/01-create-app-login.sql"]
+
+  rabbitmq:
+    environment:
+      RABBITMQ_DEFAULT_USER: ${SDPP_RABBITMQ_USER:?Debes definir SDPP_RABBITMQ_USER en .env}
+      RABBITMQ_DEFAULT_PASS: ${SDPP_RABBITMQ_PASSWORD:?Debes definir SDPP_RABBITMQ_PASSWORD en .env}
+    ports: []
+
+  redis:
+    ports: []
+
+  minio:
+    environment:
+      MINIO_ROOT_USER: ${SDPP_MINIO_USER:?Debes definir SDPP_MINIO_USER en .env}
+      MINIO_ROOT_PASSWORD: ${SDPP_MINIO_PASSWORD:?Debes definir SDPP_MINIO_PASSWORD en .env}
+      MINIO_KMS_SECRET_KEY: ${SDPP_MINIO_KMS_KEY:?Debes definir SDPP_MINIO_KMS_KEY en .env}
+    ports: []
+
+  clamav:
+    ports: []
+
+  seq:
+    environment:
+      ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "false"
+      SEQ_FIRSTRUN_ADMINPASSWORDHASH: ${SDPP_SEQ_ADMIN_PASSWORD_HASH:?Debes definir SDPP_SEQ_ADMIN_PASSWORD_HASH en .env — ver https://docs.datalust.co/docs/security#initial-admin-account}
+    ports: []
+
+  documents-api:
+    environment:
+      <<: *sdpp-auth-env
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DocumentsDb: "Server=sql-server,1433;Database=SDPP_Documents;User Id=sdpp_app;Password=${SDPP_APP_DB_PASSWORD:?Debes definir SDPP_APP_DB_PASSWORD en .env};TrustServerCertificate=True"
+      ObjectStorage__AccessKey: ${SDPP_MINIO_USER:?}
+      ObjectStorage__SecretKey: ${SDPP_MINIO_PASSWORD:?}
+      RabbitMq__Username: ${SDPP_RABBITMQ_USER:?}
+      RabbitMq__Password: ${SDPP_RABBITMQ_PASSWORD:?}
+    ports: []
+
+  classification-api:
+    environment:
+      <<: *sdpp-auth-env
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__ClassificationDb: "Server=sql-server,1433;Database=SDPP_Classification;User Id=sdpp_app;Password=${SDPP_APP_DB_PASSWORD:?};TrustServerCertificate=True"
+      RabbitMq__Username: ${SDPP_RABBITMQ_USER:?}
+      RabbitMq__Password: ${SDPP_RABBITMQ_PASSWORD:?}
+    ports: []
+
+  audit-api:
+    environment:
+      <<: *sdpp-auth-env
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__AuditDb: "Server=sql-server,1433;Database=SDPP_Audit;User Id=sdpp_app;Password=${SDPP_APP_DB_PASSWORD:?};TrustServerCertificate=True"
+      RabbitMq__Username: ${SDPP_RABBITMQ_USER:?}
+      RabbitMq__Password: ${SDPP_RABBITMQ_PASSWORD:?}
+    ports: []
+
+  signature-api:
+    environment:
+      <<: *sdpp-auth-env
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__SignatureDb: "Server=sql-server,1433;Database=SDPP_Signature;User Id=sdpp_app;Password=${SDPP_APP_DB_PASSWORD:?};TrustServerCertificate=True"
+      RabbitMq__Username: ${SDPP_RABBITMQ_USER:?}
+      RabbitMq__Password: ${SDPP_RABBITMQ_PASSWORD:?}
+      PublicWebBaseUrl: ${SDPP_PUBLIC_WEB_URL:?Debes definir SDPP_PUBLIC_WEB_URL en .env (p.ej. https://sdpp.intranet)}
+      Signature__KeyEncryptionKey: ${SDPP_SIGNATURE_KEY_ENCRYPTION_KEY:?Debes definir SDPP_SIGNATURE_KEY_ENCRYPTION_KEY en .env (32 bytes)}
+      Smtp__Host: ${SDPP_SMTP_HOST:-}
+      Smtp__Port: ${SDPP_SMTP_PORT:-587}
+      Smtp__Username: ${SDPP_SMTP_USER:-}
+      Smtp__Password: ${SDPP_SMTP_PASSWORD:-}
+      Smtp__FromAddress: ${SDPP_SMTP_FROM:-sdpp@sdpp.local}
+      Smtp__FromName: "SDPP"
+      Smtp__UseSsl: ${SDPP_SMTP_USE_SSL:-false}
+    ports: []
+
+  identity-api:
+    environment:
+      <<: *sdpp-auth-env
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__IdentityDb: "Server=sql-server,1433;Database=SDPP_Identity;User Id=sdpp_app;Password=${SDPP_APP_DB_PASSWORD:?};TrustServerCertificate=True"
+      RabbitMq__Username: ${SDPP_RABBITMQ_USER:?}
+      RabbitMq__Password: ${SDPP_RABBITMQ_PASSWORD:?}
+      Identity__GoogleClientId: ${SDPP_GOOGLE_CLIENT_ID:?Debes definir SDPP_GOOGLE_CLIENT_ID en .env}
+      Identity__BootstrapAdminEmails__0: ${SDPP_BOOTSTRAP_ADMIN_EMAIL:?Debes definir SDPP_BOOTSTRAP_ADMIN_EMAIL en .env}
+      Identity__AllowDevDomainOverride: "false"
+      Identity__MfaEncryptionKey: ${SDPP_MFA_ENCRYPTION_KEY:?Debes definir SDPP_MFA_ENCRYPTION_KEY en .env (32 bytes)}
+    ports: []
+
+  conversion-worker:
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__DocumentsDb: "Server=sql-server,1433;Database=SDPP_Documents;User Id=sdpp_app;Password=${SDPP_APP_DB_PASSWORD:?};TrustServerCertificate=True"
+      ObjectStorage__AccessKey: ${SDPP_MINIO_USER:?}
+      ObjectStorage__SecretKey: ${SDPP_MINIO_PASSWORD:?}
+      RabbitMq__Username: ${SDPP_RABBITMQ_USER:?}
+      RabbitMq__Password: ${SDPP_RABBITMQ_PASSWORD:?}
+      Protection__HmacSecretKey: ${SDPP_PROTECTION_HMAC_KEY:?Debes definir SDPP_PROTECTION_HMAC_KEY en .env}
+
+  gateway:
+    environment:
+      <<: *sdpp-auth-env
+      ASPNETCORE_ENVIRONMENT: Production
+    # No CORS policy is applied at all in Production (see Gateway's Program.cs — the dev CORS
+    # policy is only ever registered `if (builder.Environment.IsDevelopment())`), matching this
+    # deployment's "frontend and Gateway share an origin behind Apache" topology.
+    ports: ["127.0.0.1:5080:8080"]
+
+  web:
+    environment:
+      VITE_API_BASE_URL: ${SDPP_PUBLIC_WEB_URL:?}
+      VITE_GOOGLE_CLIENT_ID: ${SDPP_GOOGLE_CLIENT_ID:?}
+    ports: ["127.0.0.1:5090:8080"]

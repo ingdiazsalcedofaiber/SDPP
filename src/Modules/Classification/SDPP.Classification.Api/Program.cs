@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using SDPP.BuildingBlocks.Domain;
 using SDPP.BuildingBlocks.Infrastructure.Outbox;
+using SDPP.BuildingBlocks.Infrastructure.Health;
 using SDPP.BuildingBlocks.Infrastructure.Security;
 using SDPP.Classification.Api.Endpoints;
 using SDPP.Classification.Application;
@@ -27,6 +28,7 @@ builder.Services.AddSdppCurrentActor();
 
 builder.Services.AddClassificationApplication();
 builder.Services.AddClassificationInfrastructure(builder.Configuration);
+builder.Services.AddHealthChecks().AddSdppDatabaseHealthCheck<ClassificationDbContext>();
 
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
 {
@@ -51,6 +53,11 @@ builder.Services.AddHangfire(config => config
 builder.Services.AddHangfireServer();
 
 var app = builder.Build();
+
+// Must run before anything that reads the client IP (logging, ICurrentActor) — see
+// UseSdppForwardedHeaders's doc comment for why RemoteIpAddress is wrong without it.
+app.UseSdppForwardedHeaders();
+app.UseSdppSecurityHeaders();
 
 app.UseSerilogRequestLogging();
 app.UseHttpMetrics();
@@ -81,7 +88,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapMetrics();
 app.MapClassificationEndpoints();
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
+app.MapSdppHealthChecks();
 
 using (var scope = app.Services.CreateScope())
 {

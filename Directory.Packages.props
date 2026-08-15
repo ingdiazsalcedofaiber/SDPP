@@ -52,10 +52,14 @@
          now removed since this fixes it at the source — confirmed via an isolated probe before
          changing this). -->
     <PackageVersion Include="PdfSharp" Version="6.2.4" />
+    <PackageVersion Include="MailKit" Version="4.17.0" />
 
     <!-- Observability -->
     <PackageVersion Include="Serilog.AspNetCore" Version="8.0.3" />
     <PackageVersion Include="Serilog.Sinks.Elasticsearch" Version="10.0.0" />
+    <!-- Actual centralized-logging sink in use — the seq container in docker-compose has been
+         running unused until now; Elasticsearch above is versioned but was never wired up. -->
+    <PackageVersion Include="Serilog.Sinks.Seq" Version="8.0.0" />
     <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
     <PackageVersion Include="Serilog.Extensions.Hosting" Version="8.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.0.0" />

@@ -4,6 +4,7 @@ using SDPP.BuildingBlocks.Application;
 using SDPP.BuildingBlocks.Contracts.Documents;
 using SDPP.Documents.Application.Ports;
 using SDPP.Documents.Domain.Aggregates;
+using SDPP.Documents.Domain.Policies;
 
 namespace SDPP.Documents.Application.UseCases.UploadDocument;
 
@@ -36,6 +37,12 @@ public sealed class UploadDocumentHandler(
 {
     public async Task<Result<UploadDocumentResult>> Handle(UploadDocumentCommand request, CancellationToken cancellationToken)
     {
+        if (!AllowedFileTypePolicy.IsAllowed(request.OriginalFileName, request.DeclaredContentType))
+        {
+            return Result.Failure<UploadDocumentResult>(
+                "Tipo de archivo no permitido. Consulta los formatos admitidos con el administrador.", "FILE_TYPE_NOT_ALLOWED");
+        }
+
         var tempFilePath = Path.Combine(Path.GetTempPath(), $"sdpp-upload-{Guid.NewGuid():N}.tmp");
         await using (var tempFile = new FileStream(tempFilePath, FileMode.Create, FileAccess.ReadWrite, FileShare.None, 81920, FileOptions.DeleteOnClose | FileOptions.Asynchronous))
         {

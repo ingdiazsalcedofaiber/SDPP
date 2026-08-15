@@ -9,16 +9,25 @@ Trust y el índice completo del paquete de arquitectura.
 
 ## Estado actual
 
-Este repositorio contiene, por ahora, el **paquete de arquitectura y diseño** (Fase 0 de
-planificación, ver [roadmap](docs/04-use-cases/roadmap.md)): C4, modelo de dominio DDD, modelo de
-datos, casos de uso/backlog/roadmap, diseño de los motores de clasificación y DLP, trazabilidad y
-auditoría, RBAC, modelo de amenazas STRIDE, mapeo de cumplimiento (OWASP ASVS, ISO 27001/27701,
-NIST CSF 2.0, CIS Controls), contrato OpenAPI inicial, y arquitectura de despliegue
-(Docker/Kubernetes/CI-CD) y de respaldo/recuperación.
+SDPP tiene una implementación funcional, no solo el paquete de diseño original: backend .NET 9
+(Clean Architecture + CQRS/MediatR) con 5 módulos — Identity, Documents, Classification, Audit y
+Signature (firma electrónica nativa, no una integración con un proveedor externo) — detrás de un
+Gateway YARP, más un frontend React 19. Cada módulo tiene su propia base SQL Server (EF Core
+Code-First), mensajería vía RabbitMQ/MassTransit con patrón Outbox, jobs recurrentes con Hangfire,
+almacenamiento de documentos en MinIO con escaneo antivirus (ClamAV) previo, y una bitácora de
+auditoría con cadena de hashes inmutable (bloqueada también a nivel de SQL Server).
 
-El código fuente (solución .NET, frontend React, Helm charts) se construye a partir de la
-[estructura de solución](docs/01-architecture/solution-structure.md) ya definida, en los
-siguientes incrementos del [roadmap](docs/04-use-cases/roadmap.md).
+El stack corre localmente vía Docker Compose ([`deploy/compose/`](deploy/compose/)) y está
+preparado para producción sobre Windows Server + Apache como punto de entrada de la intranet — ver
+[docs/07-operations/windows-server-deploy.md](docs/07-operations/windows-server-deploy.md) y
+[docs/07-operations/apache-config.md](docs/07-operations/apache-config.md) — con CI/CD vía GitHub
+Actions ([docs/07-operations/ci-cd.md](docs/07-operations/ci-cd.md)) y respaldo/restauración
+automatizados ([`scripts/backup/`](scripts/backup/)).
+
+Los documentos de diseño original (C4, modelo de dominio DDD, modelo de datos, backlog/roadmap,
+STRIDE, mapeo de cumplimiento) siguen en `docs/` como referencia de arquitectura — algunos detalles
+puntuales (p. ej. Kubernetes como target de despliegue) fueron reemplazados en la práctica por la
+topología Docker Compose + Windows Server + Apache descrita arriba.
 
 ## Índice de documentación
 
@@ -31,4 +40,7 @@ siguientes incrementos del [roadmap](docs/04-use-cases/roadmap.md).
 | [docs/04-use-cases/](docs/04-use-cases/) | Casos de uso, backlog, roadmap, dashboard |
 | [docs/05-security/](docs/05-security/) | Clasificación, DLP, auditoría, RBAC, STRIDE, cumplimiento normativo |
 | [docs/06-api/](docs/06-api/) | Diseño de API REST y contrato OpenAPI |
-| [docs/07-operations/](docs/07-operations/) | Kubernetes, CI/CD, respaldo y recuperación |
+| [docs/07-operations/](docs/07-operations/) | Windows Server, Apache, CI/CD, respaldo y recuperación |
+| [docs/07-operations/windows-server-deploy.md](docs/07-operations/windows-server-deploy.md) | Despliegue real sobre Windows Server + Docker Engine |
+| [docs/07-operations/apache-config.md](docs/07-operations/apache-config.md) | Apache como punto de entrada de la intranet |
+| [docs/07-operations/ci-cd.md](docs/07-operations/ci-cd.md) | Pipeline de GitHub Actions (CI + deploy con rollback) |

@@ -8,6 +8,7 @@
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <PackageReference Include="MassTransit.RabbitMQ" />
+    <PackageReference Include="MailKit" />
     <PackageReference Include="PdfSharp" />
     <PackageReference Include="QRCoder" />
   </ItemGroup>

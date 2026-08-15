@@ -1,0 +1,71 @@
+name: Deploy
+
+# Only ever runs after CI succeeded on main — never triggered directly by a push. A red CI run can
+# never reach this workflow at all, let alone the server. See docs/07-operations/ci-cd.md.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Registered on the Windows Server itself (svc_sdpp service account) — see
+    # docs/07-operations/windows-server-deploy.md. Nothing in this job runs on GitHub's own
+    # infrastructure; the whole point of a self-hosted runner is that the deploy target and the
+    # runner are the same machine, no SSH/remote-exec step needed.
+    runs-on: [self-hosted, windows, sdpp-production]
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: C:\SDPP\app
+    steps:
+      - name: Checkout the exact commit CI validated
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Tag current images as :previous (rollback target)
+        run: |
+          $services = "documents-api","classification-api","audit-api","signature-api","identity-api","gateway","web","conversion-worker"
+          foreach ($svc in $services) {
+            docker tag "sdpp-$svc:latest" "sdpp-$svc:previous" 2>$null
+          }
+
+      - name: Build
+        run: docker compose -f deploy\compose\docker-compose.yml -f deploy\compose\production\docker-compose.prod.yml --env-file deploy\compose\production\.env build
+
+      - name: Deploy
+        run: docker compose -f deploy\compose\docker-compose.yml -f deploy\compose\production\docker-compose.prod.yml --env-file deploy\compose\production\.env up -d
+
+      - name: Health check (with rollback on failure)
+        run: |
+          $healthy = $false
+          for ($i = 0; $i -lt 12; $i++) {
+            Start-Sleep -Seconds 5
+            try {
+              $response = Invoke-WebRequest -Uri "http://127.0.0.1:5080/health" -UseBasicParsing -TimeoutSec 5
+              $body = $response.Content | ConvertFrom-Json
+              if ($body.status -eq "healthy") { $healthy = $true; break }
+            } catch {}
+          }
+
+          if (-not $healthy) {
+            Write-Warning "Health check falló — revirtiendo a las imágenes :previous"
+            $services = "documents-api","classification-api","audit-api","signature-api","identity-api","gateway","web","conversion-worker"
+            foreach ($svc in $services) {
+              docker tag "sdpp-$svc:previous" "sdpp-$svc:latest" 2>$null
+            }
+            docker compose -f deploy\compose\docker-compose.yml -f deploy\compose\production\docker-compose.prod.yml --env-file deploy\compose\production\.env up -d
+            throw "Deploy revertido — el health check nunca reportó 'healthy' tras 60s."
+          }
+
+          Write-Output "Deploy verificado: healthy."
+
+      - name: Clean up rollback tags (deploy succeeded)
+        run: |
+          $services = "documents-api","classification-api","audit-api","signature-api","identity-api","gateway","web","conversion-worker"
+          foreach ($svc in $services) {
+            docker rmi "sdpp-$svc:previous" 2>$null
+          }

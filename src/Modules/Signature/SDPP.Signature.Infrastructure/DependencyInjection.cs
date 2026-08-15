@@ -44,7 +44,20 @@ public static class DependencyInjection
         services.AddScoped<IKeyManagementService, DatabaseKeyManagementService>();
         services.AddSingleton<ITimestampAuthorityService, ServerTimestampAuthorityService>();
         services.AddSingleton<IOrganizationContextProvider, DefaultOrganizationContextProvider>();
-        services.AddScoped<IEmailSender, LoggingEmailSender>();
+        services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
+        // Real SMTP delivery activates automatically the moment Smtp:Host is configured — no code
+        // change, no redeploy of a different image, just filling in the connection string. Until
+        // then, LoggingEmailSender keeps every "email" attempt visible in Seq without pretending
+        // to have sent anything (see IEmailSender's doc comment).
+        var smtpConfigured = configuration.GetSection(SmtpOptions.SectionName).GetValue<string>("Host") is { Length: > 0 };
+        if (smtpConfigured)
+        {
+            services.AddScoped<IEmailSender, SmtpEmailSender>();
+        }
+        else
+        {
+            services.AddScoped<IEmailSender, LoggingEmailSender>();
+        }
         services.AddScoped<ILegalApprovalStampPolicy, ConfiguredLegalApprovalStampPolicy>();
 
         services.AddSdppAccessTokenForwarding();

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using MediatR;
 using SDPP.BuildingBlocks.Application;
+using SDPP.BuildingBlocks.Contracts.Identity;
 using SDPP.Identity.Application.Ports;
 
 namespace SDPP.Identity.Application.UseCases.Logout;
@@ -11,7 +12,13 @@ namespace SDPP.Identity.Application.UseCases.Logout;
 /// logout instead of just "the frontend forgot the cookie."</summary>
 public sealed record LogoutCommand(string RawRefreshToken, string? AccessTokenJti, DateTime? AccessTokenExpiresAtUtc) : ICommand;
 
-public sealed class LogoutHandler(ISessionRepository sessionRepository, IUnitOfWork unitOfWork, IRevokedTokenStore revokedTokenStore)
+public sealed class LogoutHandler(
+    ISessionRepository sessionRepository,
+    IUserRepository userRepository,
+    IUnitOfWork unitOfWork,
+    IRevokedTokenStore revokedTokenStore,
+    ICurrentActor currentActor,
+    IIntegrationEventPublisher integrationEventPublisher)
     : IRequestHandler<LogoutCommand, Result>
 {
     public async Task<Result> Handle(LogoutCommand request, CancellationToken cancellationToken)
@@ -23,6 +30,11 @@ public sealed class LogoutHandler(ISessionRepository sessionRepository, IUnitOfW
         {
             session.Revoke();
             await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var user = await userRepository.GetByIdAsync(session.UserId, cancellationToken);
+            await integrationEventPublisher.PublishAsync(new SessionLoggedOutV1(
+                Guid.NewGuid(), DateTime.UtcNow, session.UserId, user?.Email ?? currentActor.Email ?? string.Empty,
+                currentActor.IpAddress, currentActor.UserAgent), cancellationToken);
         }
 
         if (!string.IsNullOrEmpty(request.AccessTokenJti) && request.AccessTokenExpiresAtUtc is { } expiresAtUtc)

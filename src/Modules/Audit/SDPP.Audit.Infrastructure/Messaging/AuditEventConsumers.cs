@@ -4,6 +4,7 @@ using MediatR;
 using SDPP.Audit.Application.UseCases.RecordEvent;
 using SDPP.Audit.Domain.Aggregates;
 using SDPP.BuildingBlocks.Contracts.Documents;
+using SDPP.BuildingBlocks.Contracts.Identity;
 
 namespace SDPP.Audit.Infrastructure.Messaging;
 
@@ -214,5 +215,50 @@ public sealed class EnvelopeVerificationPerformedConsumer(ISender sender) : ICon
         var m = context.Message;
         var actor = new ActorContext(Guid.Empty, "Verificador público", "verificador@sdpp.internal", string.Empty, m.IpAddress, null, null, null, m.UserAgent);
         return sender.Send(new RecordEventCommand("EnvelopeVerificationPerformed", m.OccurredAtUtc, actor, m.EnvelopeId, JsonSerializer.Serialize(m)));
+    }
+}
+
+/// <summary>Three consumers for Identity's session/user-management events — these were already
+/// being published (LoginCompletionService, UpdateUserStatusCommand, UpdateUserRolesCommand) but
+/// had no consumer here, so they were silently dropped instead of joining the hash chain. Covers
+/// LOGIN (successful AND rejected attempts — AccessAttemptRecordedV1's own doc comment explains
+/// why rejections matter too), USER_UPDATED (activate/deactivate), and ROLE_CHANGED.</summary>
+public sealed class AccessAttemptRecordedConsumer(ISender sender) : IConsumer<AccessAttemptRecordedV1>
+{
+    public Task Consume(ConsumeContext<AccessAttemptRecordedV1> context)
+    {
+        var m = context.Message;
+        var actor = new ActorContext(m.UserId ?? Guid.Empty, m.FullNameSnapshot, m.Email, string.Empty, m.IpAddress, null, null, null, m.UserAgent);
+        return sender.Send(new RecordEventCommand("AccessAttemptRecorded", m.OccurredAtUtc, actor, m.UserId, JsonSerializer.Serialize(m)));
+    }
+}
+
+public sealed class UserStatusChangedConsumer(ISender sender) : IConsumer<UserStatusChangedV1>
+{
+    public Task Consume(ConsumeContext<UserStatusChangedV1> context)
+    {
+        var m = context.Message;
+        var actor = new ActorContext(m.ChangedByUserId, string.Empty, string.Empty, string.Empty, null, null, null, null, null);
+        return sender.Send(new RecordEventCommand("UserStatusChanged", m.OccurredAtUtc, actor, m.UserId, JsonSerializer.Serialize(m)));
+    }
+}
+
+public sealed class UserRolesChangedConsumer(ISender sender) : IConsumer<UserRolesChangedV1>
+{
+    public Task Consume(ConsumeContext<UserRolesChangedV1> context)
+    {
+        var m = context.Message;
+        var actor = new ActorContext(m.ChangedByUserId, string.Empty, string.Empty, string.Empty, null, null, null, null, null);
+        return sender.Send(new RecordEventCommand("UserRolesChanged", m.OccurredAtUtc, actor, m.UserId, JsonSerializer.Serialize(m)));
+    }
+}
+
+public sealed class SessionLoggedOutConsumer(ISender sender) : IConsumer<SessionLoggedOutV1>
+{
+    public Task Consume(ConsumeContext<SessionLoggedOutV1> context)
+    {
+        var m = context.Message;
+        var actor = new ActorContext(m.UserId, string.Empty, m.Email, string.Empty, m.IpAddress, null, null, null, m.UserAgent);
+        return sender.Send(new RecordEventCommand("SessionLoggedOut", m.OccurredAtUtc, actor, m.UserId, JsonSerializer.Serialize(m)));
     }
 }

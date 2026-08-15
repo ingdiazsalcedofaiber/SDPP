@@ -20,6 +20,7 @@ Log.Logger = new LoggerConfiguration()
     .Enrich.FromLogContext()
     .Enrich.WithProperty("Service", "SDPP.Conversion.Worker")
     .WriteTo.Console()
+    .WriteTo.Seq("http://seq:80")
     .CreateLogger();
 builder.Services.AddSerilog();
 

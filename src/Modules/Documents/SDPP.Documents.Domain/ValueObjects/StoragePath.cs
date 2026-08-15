@@ -21,8 +21,10 @@ public sealed class StoragePath : ValueObject
         ObjectKey = objectKey;
     }
 
+    public const string BucketName = "sdpp-documents";
+
     public static StoragePath ForDocument(Guid documentId, string originalFileName) =>
-        new("sdpp-documents", $"{documentId:N}/{originalFileName}");
+        new(BucketName, $"{documentId:N}/{originalFileName}");
 
     protected override IEnumerable<object?> GetEqualityComponents()
     {

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using SDPP.BuildingBlocks.Domain;
 using SDPP.BuildingBlocks.Infrastructure.Outbox;
+using SDPP.BuildingBlocks.Infrastructure.Health;
 using SDPP.BuildingBlocks.Infrastructure.Security;
 using SDPP.Documents.Api.Endpoints;
 using SDPP.Documents.Application;
@@ -18,6 +19,13 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
     .ReadFrom.Configuration(context.Configuration)
     .Enrich.FromLogContext()
     .Enrich.WithProperty("Service", "SDPP.Documents.Api"));
+
+// Kestrel's own default (~28.6 MB) is well below real-world document sizes (scanned contracts,
+// multi-page PDFs) — this is the only module that accepts file uploads, so it's the only one that
+// needs raising. 200 MB is a deliberate enterprise-document ceiling, not "unlimited": still bounded
+// against abuse, just not surprising for legitimate use. The Gateway/YARP hop in front of this must
+// allow at least this much too (see Gateway's own Kestrel config).
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 200 * 1024 * 1024);
 
 // --- Authentication: self-issued JWTs from SDPP.Identity.Api after a Google login, read from the
 // sdpp_at HttpOnly cookie — see SDPP.BuildingBlocks.Infrastructure.Security.CookieJwtBearerExtensions.
@@ -34,6 +42,9 @@ builder.Services.AddAuthorizationBuilder().AddPolicy("Administrador", policy => 
 
 builder.Services.AddDocumentsApplication();
 builder.Services.AddDocumentsInfrastructure(builder.Configuration);
+builder.Services.AddHealthChecks()
+    .AddSdppDatabaseHealthCheck<DocumentsDbContext>()
+    .AddCheck<SDPP.Documents.Infrastructure.Storage.MinioHealthCheck>("storage");
 
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
 {
@@ -60,6 +71,11 @@ builder.Services.AddHangfire(config => config
 builder.Services.AddHangfireServer();
 
 var app = builder.Build();
+
+// Must run before anything that reads the client IP (logging, ICurrentActor) — see
+// UseSdppForwardedHeaders's doc comment for why RemoteIpAddress is wrong without it.
+app.UseSdppForwardedHeaders();
+app.UseSdppSecurityHeaders();
 
 app.UseSerilogRequestLogging();
 app.UseHttpMetrics(); // prometheus-net: exposes request duration/count histograms
@@ -93,7 +109,7 @@ app.MapDocumentEndpoints();
 app.MapConversionEndpoints();
 app.MapReportingEndpoints();
 
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
+app.MapSdppHealthChecks();
 
 using (var scope = app.Services.CreateScope())
 {

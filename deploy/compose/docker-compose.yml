@@ -34,6 +34,17 @@ services:
       timeout: 5s
       retries: 10
 
+  # Runs once against a healthy sql-server to provision the least-privilege sdpp_app login (see
+  # sql-init/01-create-app-login.sql) — every API below connects as sdpp_app, never sa. Exits
+  # after the script runs; the 5 APIs depend on it completing successfully before they start, so
+  # a fresh `docker compose down -v && up` bootstraps cleanly with no manual step.
+  sql-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    entrypoint: ["/opt/mssql-tools18/bin/sqlcmd", "-S", "sql-server,1433", "-U", "sa", "-P", "Sdpp!DevOnly123", "-C", "-i", "/sql-init/01-create-app-login.sql"]
+    volumes: ["./sql-init:/sql-init:ro"]
+    depends_on:
+      sql-server: { condition: service_healthy }
+
   rabbitmq:
     image: rabbitmq:3.13-management
     environment:
@@ -93,7 +104,7 @@ services:
     environment:
       <<: *sdpp-auth-env
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__DocumentsDb: "Server=sql-server,1433;Database=SDPP_Documents;User Id=sa;Password=Sdpp!DevOnly123;TrustServerCertificate=True"
+      ConnectionStrings__DocumentsDb: "Server=sql-server,1433;Database=SDPP_Documents;User Id=sdpp_app;Password=rDEv929WW1I6NuEbRFC8pJvWsrRDAa1!;TrustServerCertificate=True"
       ObjectStorage__Endpoint: "minio:9000"
       ObjectStorage__AccessKey: "sdpp_dev"
       ObjectStorage__SecretKey: "sdpp_dev_secret"
@@ -105,6 +116,7 @@ services:
     ports: ["5081:8080"]
     depends_on:
       sql-server: { condition: service_healthy }
+      sql-init: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
       minio: { condition: service_started }
       redis: { condition: service_started }
@@ -116,7 +128,7 @@ services:
     environment:
       <<: *sdpp-auth-env
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__ClassificationDb: "Server=sql-server,1433;Database=SDPP_Classification;User Id=sa;Password=Sdpp!DevOnly123;TrustServerCertificate=True"
+      ConnectionStrings__ClassificationDb: "Server=sql-server,1433;Database=SDPP_Classification;User Id=sdpp_app;Password=rDEv929WW1I6NuEbRFC8pJvWsrRDAa1!;TrustServerCertificate=True"
       RabbitMq__Host: "rabbitmq"
       RabbitMq__Username: "sdpp_dev"
       RabbitMq__Password: "sdpp_dev_secret"
@@ -124,6 +136,7 @@ services:
     ports: ["5082:8080"]
     depends_on:
       sql-server: { condition: service_healthy }
+      sql-init: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
       redis: { condition: service_started }
 
@@ -134,13 +147,14 @@ services:
     environment:
       <<: *sdpp-auth-env
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__AuditDb: "Server=sql-server,1433;Database=SDPP_Audit;User Id=sa;Password=Sdpp!DevOnly123;TrustServerCertificate=True"
+      ConnectionStrings__AuditDb: "Server=sql-server,1433;Database=SDPP_Audit;User Id=sdpp_app;Password=rDEv929WW1I6NuEbRFC8pJvWsrRDAa1!;TrustServerCertificate=True"
       RabbitMq__Host: "rabbitmq"
       RabbitMq__Username: "sdpp_dev"
       RabbitMq__Password: "sdpp_dev_secret"
     ports: ["5083:8080"]
     depends_on:
       sql-server: { condition: service_healthy }
+      sql-init: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
       redis: { condition: service_started }
 
@@ -151,7 +165,7 @@ services:
     environment:
       <<: *sdpp-auth-env
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__SignatureDb: "Server=sql-server,1433;Database=SDPP_Signature;User Id=sa;Password=Sdpp!DevOnly123;TrustServerCertificate=True"
+      ConnectionStrings__SignatureDb: "Server=sql-server,1433;Database=SDPP_Signature;User Id=sdpp_app;Password=rDEv929WW1I6NuEbRFC8pJvWsrRDAa1!;TrustServerCertificate=True"
       RabbitMq__Host: "rabbitmq"
       RabbitMq__Username: "sdpp_dev"
       RabbitMq__Password: "sdpp_dev_secret"
@@ -165,6 +179,7 @@ services:
     ports: ["5085:8080"]
     depends_on:
       sql-server: { condition: service_healthy }
+      sql-init: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
       redis: { condition: service_started }
       identity-api: { condition: service_started }
@@ -177,7 +192,7 @@ services:
     environment:
       <<: *sdpp-auth-env
       ASPNETCORE_ENVIRONMENT: Development
-      ConnectionStrings__IdentityDb: "Server=sql-server,1433;Database=SDPP_Identity;User Id=sa;Password=Sdpp!DevOnly123;TrustServerCertificate=True"
+      ConnectionStrings__IdentityDb: "Server=sql-server,1433;Database=SDPP_Identity;User Id=sdpp_app;Password=rDEv929WW1I6NuEbRFC8pJvWsrRDAa1!;TrustServerCertificate=True"
       RabbitMq__Host: "rabbitmq"
       RabbitMq__Username: "sdpp_dev"
       RabbitMq__Password: "sdpp_dev_secret"
@@ -201,6 +216,7 @@ services:
     ports: ["5084:8080"]
     depends_on:
       sql-server: { condition: service_healthy }
+      sql-init: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
       redis: { condition: service_started }
 
@@ -210,7 +226,7 @@ services:
       dockerfile: src/Workers/SDPP.Conversion.Worker/Dockerfile
     environment:
       DOTNET_ENVIRONMENT: Development
-      ConnectionStrings__DocumentsDb: "Server=sql-server,1433;Database=SDPP_Documents;User Id=sa;Password=Sdpp!DevOnly123;TrustServerCertificate=True"
+      ConnectionStrings__DocumentsDb: "Server=sql-server,1433;Database=SDPP_Documents;User Id=sdpp_app;Password=rDEv929WW1I6NuEbRFC8pJvWsrRDAa1!;TrustServerCertificate=True"
       ObjectStorage__Endpoint: "minio:9000"
       ObjectStorage__AccessKey: "sdpp_dev"
       ObjectStorage__SecretKey: "sdpp_dev_secret"
@@ -225,6 +241,7 @@ services:
       Protection__HmacSecretKey: "sdpp-dev-protection-hmac-key-change-in-production"
     depends_on:
       sql-server: { condition: service_healthy }
+      sql-init: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
       minio: { condition: service_started }
 

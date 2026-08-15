@@ -1,0 +1,86 @@
+name: CI
+
+# Runs on every push/PR against main — build, unit tests, and a NuGet vulnerability audit (the same
+# check that caught the MailKit 4.9.0 advisory during development; see Directory.Packages.props).
+# Deploy is a SEPARATE workflow (deploy.yml) that only runs after this one succeeds on main, never
+# coupled into the same job — a red CI run must never be able to reach production.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: "9.0.x"
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore SDPP.sln
+
+      # Fails the build on any known-vulnerable NuGet package (moderate severity or above) — same
+      # NU1902/NU1903 audit that already caught one real issue (MailKit 4.9.0) during this hardening
+      # pass, not a hypothetical check.
+      - name: Security audit (NuGet advisories)
+        run: dotnet list SDPP.sln package --vulnerable --include-transitive 2>&1 | tee vulnerability-report.txt
+
+      - name: Build
+        run: dotnet build SDPP.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test SDPP.sln -c Release --no-build --logger "trx;LogFileName=test-results.trx" --results-directory ./TestResults
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/*.trx
+
+  frontend:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: frontend/sdpp-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/sdpp-web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check + build
+        run: npm run build
+
+  docker-build:
+    runs-on: windows-latest
+    needs: [build-and-test, frontend]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Proves every Dockerfile still builds cleanly on the exact compose topology this repo
+      # ships — the same commands used throughout development (deploy/compose/docker-compose.yml),
+      # not a hand-maintained parallel build matrix that can silently drift from it.
+      - name: Build all service images
+        run: docker compose -f deploy/compose/docker-compose.yml build

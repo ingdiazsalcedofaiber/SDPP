@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using SDPP.BuildingBlocks.Domain;
 using SDPP.BuildingBlocks.Infrastructure.Outbox;
+using SDPP.BuildingBlocks.Infrastructure.Health;
 using SDPP.BuildingBlocks.Infrastructure.Security;
 using SDPP.Signature.Api.Endpoints;
 using SDPP.Signature.Application;
@@ -26,6 +27,7 @@ builder.Services.AddSdppCurrentActor();
 
 builder.Services.AddSignatureApplication();
 builder.Services.AddSignatureInfrastructure(builder.Configuration);
+builder.Services.AddHealthChecks().AddSdppDatabaseHealthCheck<SignatureDbContext>();
 
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
 {
@@ -54,6 +56,7 @@ var app = builder.Build();
 // Must run before anything that reads the client IP (logging, ICurrentActor) — see
 // UseSdppForwardedHeaders's doc comment for why RemoteIpAddress is wrong without it.
 app.UseSdppForwardedHeaders();
+app.UseSdppSecurityHeaders();
 
 app.UseSerilogRequestLogging();
 app.UseHttpMetrics();
@@ -89,7 +92,7 @@ app.MapSavedSignatureEndpoints();
 app.MapVerificationEndpoints();
 app.MapNotificationEndpoints();
 app.MapDashboardEndpoints();
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
+app.MapSdppHealthChecks();
 
 using (var scope = app.Services.CreateScope())
 {

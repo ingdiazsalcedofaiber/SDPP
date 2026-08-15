@@ -11,6 +11,11 @@ builder.Host.UseSerilog((context, configuration) => configuration
     .Enrich.FromLogContext()
     .Enrich.WithProperty("Service", "SDPP.Gateway"));
 
+// Must match (or exceed) Documents.Api's own raised limit — a document upload passes through this
+// Kestrel listener first, so leaving this at Kestrel's ~28.6 MB default would reject large uploads
+// here before they ever reach Documents.Api's more permissive one.
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 200 * 1024 * 1024);
+
 // The Gateway is the single entry point from the corporate intranet (see
 // docs/07-operations/kubernetes-architecture.md §2, sdpp-gateway namespace) — TLS terminates
 // here with a certificate issued by the internal PKI, never a public CA. Same shared cookie-JWT
@@ -72,20 +77,7 @@ var app = builder.Build();
 
 app.UseSerilogRequestLogging();
 app.UseHttpMetrics();
-
-// Security headers applied uniformly at the edge (OWASP ASVS V14, docs/05-security/compliance-mapping.md).
-app.Use(async (context, next) =>
-{
-    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
-    context.Response.Headers.Append("X-Frame-Options", "DENY");
-    context.Response.Headers.Append("Referrer-Policy", "no-referrer");
-    context.Response.Headers.Append("Content-Security-Policy", "default-src 'self'");
-    if (!app.Environment.IsDevelopment())
-    {
-        context.Response.Headers.Append("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-    }
-    await next();
-});
+app.UseSdppSecurityHeaders();
 
 if (app.Environment.IsDevelopment())
 {

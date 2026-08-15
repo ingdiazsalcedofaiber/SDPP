@@ -41,6 +41,10 @@ public static class DependencyInjection
             bus.AddConsumer<SignatureEnvelopeExpiredConsumer>();
             bus.AddConsumer<CertificateGeneratedConsumer>();
             bus.AddConsumer<EnvelopeVerificationPerformedConsumer>();
+            bus.AddConsumer<AccessAttemptRecordedConsumer>();
+            bus.AddConsumer<UserStatusChangedConsumer>();
+            bus.AddConsumer<UserRolesChangedConsumer>();
+            bus.AddConsumer<SessionLoggedOutConsumer>();
 
             bus.UsingRabbitMq((context, cfg) =>
             {

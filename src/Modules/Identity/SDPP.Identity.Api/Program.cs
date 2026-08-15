@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Prometheus;
 using SDPP.BuildingBlocks.Domain;
 using SDPP.BuildingBlocks.Infrastructure.Outbox;
+using SDPP.BuildingBlocks.Infrastructure.Health;
 using SDPP.BuildingBlocks.Infrastructure.Security;
 using SDPP.Identity.Api.Endpoints;
 using SDPP.Identity.Application;
@@ -31,6 +32,7 @@ builder.Services.AddSdppCurrentActor();
 
 builder.Services.AddIdentityApplication();
 builder.Services.AddIdentityInfrastructure(builder.Configuration);
+builder.Services.AddHealthChecks().AddSdppDatabaseHealthCheck<IdentityDbContext>();
 
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
 {
@@ -55,6 +57,11 @@ builder.Services.AddHangfire(config => config
 builder.Services.AddHangfireServer();
 
 var app = builder.Build();
+
+// Must run before anything that reads the client IP (logging, ICurrentActor) — see
+// UseSdppForwardedHeaders's doc comment for why RemoteIpAddress is wrong without it.
+app.UseSdppForwardedHeaders();
+app.UseSdppSecurityHeaders();
 
 app.UseSerilogRequestLogging();
 app.UseHttpMetrics();
@@ -88,7 +95,7 @@ app.MapAuthEndpoints();
 app.MapAdminEndpoints();
 app.MapUserEndpoints();
 
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
+app.MapSdppHealthChecks();
 
 using (var scope = app.Services.CreateScope())
 {

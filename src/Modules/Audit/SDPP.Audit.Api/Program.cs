@@ -4,6 +4,7 @@ using SDPP.Audit.Api.Endpoints;
 using SDPP.Audit.Application;
 using SDPP.Audit.Infrastructure;
 using SDPP.Audit.Infrastructure.Persistence;
+using SDPP.BuildingBlocks.Infrastructure.Health;
 using SDPP.BuildingBlocks.Infrastructure.Security;
 using Serilog;
 
@@ -25,6 +26,7 @@ builder.Services.AddAuthorizationBuilder()
 
 builder.Services.AddAuditApplication();
 builder.Services.AddAuditInfrastructure(builder.Configuration);
+builder.Services.AddHealthChecks().AddSdppDatabaseHealthCheck<AuditDbContext>();
 
 builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
 {
@@ -38,6 +40,11 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+// Must run before anything that reads the client IP (logging, ICurrentActor) — see
+// UseSdppForwardedHeaders's doc comment for why RemoteIpAddress is wrong without it.
+app.UseSdppForwardedHeaders();
+app.UseSdppSecurityHeaders();
 
 app.UseSerilogRequestLogging();
 app.UseHttpMetrics();
@@ -53,7 +60,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapMetrics();
 app.MapAuditEndpoints();
-app.MapGet("/health", () => Results.Ok(new { status = "healthy" })).AllowAnonymous();
+app.MapSdppHealthChecks();
 
 using (var scope = app.Services.CreateScope())
 {
