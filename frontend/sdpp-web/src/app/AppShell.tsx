@@ -24,6 +24,12 @@ import { BRAND_COLORS } from "../shared/theme";
 
 const DRAWER_WIDTH = 240;
 const ADMIN_ACCENT = "#6A1B9A";
+// Explicit (not min-) height so both the real AppBar Toolbar and the Drawer's spacer below are
+// guaranteed pixel-identical — two independent <Toolbar> elements relying on MUI's default/
+// responsive min-height each resolving "close enough" is exactly what previously let them drift
+// apart and made the sidebar's nav list start hard against the header with no breathing room.
+const TOPBAR_HEIGHT = 84;
+const STRIPE_HEIGHT = 3;
 
 const NAV_ITEMS = [
   { path: "/", label: "Dashboard", icon: <DashboardIcon />, color: BRAND_COLORS.teal },
@@ -55,7 +61,7 @@ export function AppShell() {
         color="inherit"
         sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: "#fff" }}
       >
-        <Toolbar sx={{ justifyContent: "space-between", py: 0.75 }}>
+        <Toolbar sx={{ justifyContent: "space-between", height: TOPBAR_HEIGHT, minHeight: `${TOPBAR_HEIGHT}px !important` }}>
           <SdppLogo />
           {user && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -123,7 +129,7 @@ export function AppShell() {
             identidad visual en vez de terminar en un borde plano. */}
         <Box
           sx={{
-            height: 3,
+            height: STRIPE_HEIGHT,
             background: `linear-gradient(90deg, ${BRAND_COLORS.teal} 0%, ${BRAND_COLORS.orange} 50%, ${BRAND_COLORS.magenta} 100%)`,
           }}
         />
@@ -137,8 +143,8 @@ export function AppShell() {
           [`& .MuiDrawer-paper`]: { width: DRAWER_WIDTH, boxSizing: "border-box", bgcolor: "#FBFDFC", borderRight: "1px solid rgba(15, 40, 38, 0.06)" },
         }}
       >
-        <Toolbar />
-        <List sx={{ px: 1.5, py: 2, display: "flex", flexDirection: "column", gap: 0.5 }}>
+        <Box sx={{ height: TOPBAR_HEIGHT + STRIPE_HEIGHT, flexShrink: 0 }} />
+        <List sx={{ px: 1.5, pt: 3.5, pb: 2, display: "flex", flexDirection: "column", gap: 0.5 }}>
           {NAV_ITEMS.filter((item) => !item.requiresRole || item.requiresRole.some(hasRole))
             .map((item) => {
               // Exact match for "/", startsWith for everything else — "/firmar" now has nested
@@ -151,12 +157,13 @@ export function AppShell() {
                   onClick={() => navigate(item.path)}
                   sx={{
                     borderRadius: 2.5,
-                    transition: "background-color 0.15s ease",
+                    transition: "background-color 0.15s ease, box-shadow 0.15s ease",
                     "&:hover": { bgcolor: "rgba(15, 40, 38, 0.05)" },
                     "&.Mui-selected": {
-                      bgcolor: `${item.color}1A`,
-                      "&:hover": { bgcolor: `${item.color}26` },
-                      "& .MuiListItemText-primary": { color: item.color, fontWeight: 600 },
+                      bgcolor: item.color,
+                      boxShadow: `0 4px 14px ${item.color}55`,
+                      "&:hover": { bgcolor: item.color },
+                      "& .MuiListItemText-primary": { color: "#fff", fontWeight: 700 },
                     },
                   }}
                 >
@@ -169,7 +176,7 @@ export function AppShell() {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        bgcolor: selected ? item.color : `${item.color}1A`,
+                        bgcolor: selected ? "rgba(255,255,255,0.22)" : `${item.color}1A`,
                         color: selected ? "#fff" : item.color,
                         transition: "background-color 0.15s ease, color 0.15s ease",
                         "& svg": { fontSize: 18 },
@@ -186,7 +193,7 @@ export function AppShell() {
       </Drawer>
 
       <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
-        <Toolbar />
+        <Box sx={{ height: TOPBAR_HEIGHT + STRIPE_HEIGHT, flexShrink: 0 }} />
         <Outlet />
       </Box>
     </Box>

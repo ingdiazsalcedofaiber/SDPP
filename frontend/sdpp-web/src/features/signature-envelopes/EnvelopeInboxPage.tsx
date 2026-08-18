@@ -18,6 +18,9 @@ import HourglassTopIcon from "@mui/icons-material/HourglassTopOutlined";
 import EditNoteIcon from "@mui/icons-material/EditNoteOutlined";
 import TaskAltIcon from "@mui/icons-material/TaskAltOutlined";
 import TimerIcon from "@mui/icons-material/TimerOutlined";
+import ListAltIcon from "@mui/icons-material/ListAltOutlined";
+import OutboxIcon from "@mui/icons-material/OutboxOutlined";
+import InboxIcon from "@mui/icons-material/InboxOutlined";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { listEnvelopes, getDashboardSummary } from "../../shared/api/signature";
@@ -38,10 +41,10 @@ const STATUS_COLORS: Record<EnvelopeStatus, string> = {
   Expired: "#B23A2E",
 };
 
-const TABS: { value: "all" | "sent" | "pending"; label: string }[] = [
-  { value: "all", label: "Todos" },
-  { value: "pending", label: "Pendientes de mi firma" },
-  { value: "sent", label: "Enviados por mí" },
+const TABS: { value: "all" | "sent" | "pending"; label: string; icon: React.ReactElement }[] = [
+  { value: "all", label: "Todos", icon: <ListAltIcon fontSize="small" /> },
+  { value: "pending", label: "Pendientes de mi firma", icon: <InboxIcon fontSize="small" /> },
+  { value: "sent", label: "Enviados por mí", icon: <OutboxIcon fontSize="small" /> },
 ];
 
 // Forces América/Bogotá — see EnvelopeDetailPage.tsx's formatDateTime for why this can't rely on
@@ -84,13 +87,38 @@ export function EnvelopeInboxPage() {
         />
       </Box>
 
-      <Tabs value={scope} onChange={(_e, v) => setScope(v)} sx={{ mb: 2 }}>
+      <Tabs
+        value={scope}
+        onChange={(_e, v) => setScope(v)}
+        sx={{
+          mb: 2.5,
+          minHeight: 0,
+          bgcolor: "rgba(15, 40, 38, 0.05)",
+          borderRadius: 999,
+          p: 0.5,
+          width: "fit-content",
+          "& .MuiTabs-indicator": { display: "none" },
+          "& .MuiTab-root": {
+            minHeight: 0,
+            textTransform: "none",
+            fontSize: 13.5,
+            fontWeight: 600,
+            borderRadius: 999,
+            px: 2,
+            py: 1,
+            minWidth: 0,
+            color: BRAND_COLORS.textLight,
+            transition: "background-color 0.15s ease, color 0.15s ease",
+          },
+          "& .Mui-selected": { bgcolor: `${BRAND_COLORS.teal} !important`, color: "#fff !important" },
+        }}
+      >
         {TABS.map((tab) => (
-          <Tab key={tab.value} value={tab.value} label={tab.label} />
+          <Tab key={tab.value} value={tab.value} label={tab.label} icon={tab.icon} iconPosition="start" />
         ))}
       </Tabs>
 
-      <Paper sx={{ p: query.data?.length ? 0 : 4 }}>
+      <Paper sx={{ p: query.data?.length ? 0 : 4, overflow: "hidden" }}>
         {query.isPending && (
           <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
             <CircularProgress />
@@ -98,9 +126,10 @@ export function EnvelopeInboxPage() {
         )}
 
         {query.isSuccess && query.data.length === 0 && (
-          <Typography variant="body2" color="text.secondary" sx={{ textAlign: "center" }}>
-            No hay sobres en esta vista todavía.
-          </Typography>
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, py: 3, color: BRAND_COLORS.textLight }}>
+            <InboxIcon sx={{ fontSize: 36 }} />
+            <Typography variant="body2" color="text.secondary">No hay sobres en esta vista todavía.</Typography>
+          </Box>
         )}
 
         {query.isSuccess && query.data.length > 0 && (
@@ -117,8 +146,13 @@ export function EnvelopeInboxPage() {
             </TableHead>
             <TableBody>
               {query.data.map((envelope) => (
-                <TableRow key={envelope.envelopeId} hover sx={{ cursor: "pointer" }} onClick={() => navigate(`/firmar/${envelope.envelopeId}`)}>
-                  <TableCell sx={{ fontWeight: 600 }}>{envelope.title}</TableCell>
+                <TableRow
+                  key={envelope.envelopeId}
+                  hover
+                  sx={{ cursor: "pointer", "& .MuiTableCell-root": { py: 1.75 } }}
+                  onClick={() => navigate(`/firmar/${envelope.envelopeId}`)}
+                >
+                  <TableCell sx={{ fontWeight: 700, color: BRAND_COLORS.teal }}>{envelope.title}</TableCell>
                   <TableCell>
                     <Chip
                       size="small"

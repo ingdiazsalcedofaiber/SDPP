@@ -15,7 +15,14 @@ public sealed record ResolvedField(
 public sealed record CertificateRecipientSummary(
     string FullName, string Email, string? AuthMethodUsed,
     DateTime? SentAtUtc, DateTime? ViewedAtUtc, string? ViewedIpAddress, DateTime? SignedAtUtc, string? SignedIpAddress,
-    IReadOnlyList<string> SignatureHashes, byte[]? SignatureImage,
+    // Singular — the ONE representative field's hash (same field as SignatureImage below), matching
+    // the short hash caption stamped on the document page directly under that signature/initials
+    // image (see PdfSharpEnvelopeEmbeddingEngine.DrawSignatureCaption) — deliberately NOT
+    // DocumentSignature.CanonicalPayloadHash, which folds the field hash together with identity/
+    // consent/timestamp context into a different value that would never match what's on the page.
+    // A recipient with more than one field (e.g. Firma + the Gerencia Legal stamp) still only gets
+    // one line here — see CompleteRecipientSigningCommand's representativeField selection.
+    string? SignatureHash, byte[]? SignatureImage,
     Guid? CryptographicSignatureId, string? CryptographicAlgorithm);
 
 /// <summary>Everything needed to append the "Certificado de Auditoría" page (spec point 1) —

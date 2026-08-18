@@ -27,7 +27,17 @@ export const sdppTheme = createTheme({
   },
   shape: { borderRadius: 12 },
   typography: {
-    fontFamily: '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    fontFamily: '"Plus Jakarta Sans", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    // The variable font's own weight steps — MUI's defaults (300/400/500/700) skip 600 and 800,
+    // both used deliberately across this redesign (StatCard values, sidebar active state, hero
+    // card labels) for a stronger, less uniformly-medium hierarchy than the default scale gives.
+    fontWeightLight: 400,
+    fontWeightRegular: 500,
+    fontWeightMedium: 600,
+    fontWeightBold: 700,
+    h4: { fontWeight: 700 },
+    h5: { fontWeight: 700 },
+    h6: { fontWeight: 700 },
   },
   components: {
     MuiPaper: {

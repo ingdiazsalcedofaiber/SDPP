@@ -344,6 +344,22 @@ public sealed class PdfSharpEnvelopeEmbeddingEngine(ILogger<PdfSharpEnvelopeEmbe
     private const string SecurityLevelSdppSession = "Correo electrónico, Sesión SDPP (MFA)";
     private const string SecurityLevelEmailOtp = "Correo electrónico, código de un solo uso";
 
+    // Same palette as the frontend's BRAND_COLORS (src/shared/theme.ts) — the certificate is the
+    // one artifact that leaves the app as a standalone PDF, so it's the one place brand
+    // consistency has to be hand-kept in sync rather than inherited from a shared theme file.
+    // PdfSharpFontResolver only ever resolves DejaVuSans Regular (no reliable Bold face — see its
+    // own doc comment), so hierarchy below is built with size/color/spacing only, never
+    // XFontStyleEx.Bold.
+    private static readonly XColor CertTeal = XColor.FromArgb(20, 168, 156);
+    private static readonly XColor CertOrange = XColor.FromArgb(245, 130, 31);
+    private static readonly XColor CertMagenta = XColor.FromArgb(214, 33, 122);
+    private static readonly XColor CertTextDark = XColor.FromArgb(58, 58, 58);
+    private static readonly XColor CertTextMuted = XColor.FromArgb(125, 125, 125);
+    private static readonly XColor CertPanelBg = XColor.FromArgb(244, 249, 248);
+    private static readonly XColor CertPanelBorder = XColor.FromArgb(210, 228, 224);
+    private static readonly XColor CertCalloutBg = XColor.FromArgb(250, 250, 250);
+    private static readonly XColor CertCardBorder = XColor.FromArgb(225, 225, 225);
+
     private const string LegalDeclaration =
         "Este documento fue suscrito mediante un proceso de firma electrónica con trazabilidad " +
         "completa: verificación de identidad de cada firmante, registro expreso de su consentimiento, " +
@@ -387,81 +403,223 @@ public sealed class PdfSharpEnvelopeEmbeddingEngine(ILogger<PdfSharpEnvelopeEmbe
         return $"{local:yyyy-MM-dd HH:mm:ss} (UTC-05:00) Bogotá, Colombia";
     }
 
-    /// <summary>Deliberately styled after a DocuSign "Certificado de finalización": corporate logo
-    /// and title, an envelope summary block, a plain-language legal declaration of what kind of
-    /// signature this is, then one block per signer with their own signature image, the same
-    /// three-event timeline (enviado/visto/firmado, each with its own IP) and a "nivel de seguridad"
-    /// line naming the auth method — see AuditCertificateInfo's doc comment for why the file's own
-    /// hash is never printed here. Paginates: NewPageIfNeeded starts a fresh page whenever a block
-    /// wouldn't fit on the current one, so an envelope with many signers never truncates silently.</summary>
+    /// <summary>Number of lines <see cref="DrawWrappedText"/> would produce for this text, without
+    /// drawing anything — lets a panel's background box be measured and painted BEFORE its text
+    /// (correct z-order), while still wrapping at the exact same width/font the real draw uses.</summary>
+    private static int CountWrappedLines(XGraphics gfx, string text, XFont font, double maxWidth)
+    {
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var line = "";
+        var lines = 0;
+        foreach (var word in words)
+        {
+            var candidate = line.Length == 0 ? word : $"{line} {word}";
+            if (gfx.MeasureString(candidate, font).Width > maxWidth && line.Length > 0)
+            {
+                lines++;
+                line = word;
+            }
+            else
+            {
+                line = candidate;
+            }
+        }
+        if (line.Length > 0) lines++;
+        return lines;
+    }
+
+    /// <summary>Filled circle + centered initial — the closest a PDF-drawn "avatar" gets without an
+    /// actual photo, same idea as the frontend's Avatar bubble (AppShell.tsx) for visual continuity.</summary>
+    private static void DrawInitialAvatar(XGraphics gfx, string fullName, double centerX, double centerY, double diameter, XColor color)
+    {
+        gfx.DrawEllipse(new XSolidBrush(color), centerX - diameter / 2, centerY - diameter / 2, diameter, diameter);
+        var initial = fullName.Length > 0 ? fullName[..1].ToUpperInvariant() : "?";
+        var font = new XFont(PdfSharpFontResolver.DefaultFamilyName, diameter * 0.45);
+        var size = gfx.MeasureString(initial, font);
+        gfx.DrawString(initial, font, XBrushes.White, centerX - size.Width / 2, centerY + size.Height / 2 - size.Height * 0.12);
+    }
+
+    /// <summary>Small filled rounded pill with centered text — used for the "Completado" status and
+    /// each signer's authentication level, standing in for the frontend's MUI Chip.</summary>
+    private static double DrawPill(XGraphics gfx, string text, XFont font, double x, double y, XColor color, bool filled = true)
+    {
+        var textSize = gfx.MeasureString(text, font);
+        var paddingX = 8.0;
+        var height = textSize.Height + 7;
+        var width = textSize.Width + paddingX * 2;
+        var pen = new XPen(color, 1);
+        if (filled)
+        {
+            gfx.DrawRoundedRectangle(new XSolidBrush(color), x, y, width, height, height, height);
+            gfx.DrawString(text, font, XBrushes.White, x + paddingX, y + height / 2 + textSize.Height / 2 - textSize.Height * 0.14);
+        }
+        else
+        {
+            gfx.DrawRoundedRectangle(pen, new XSolidBrush(XColor.FromArgb(255, 255, 255)), x, y, width, height, height, height);
+            gfx.DrawString(text, font, new XSolidBrush(color), x + paddingX, y + height / 2 + textSize.Height / 2 - textSize.Height * 0.14);
+        }
+        return width;
+    }
+
+    /// <summary>Deliberately styled after a DocuSign "Certificado de finalización", now with SDPP's
+    /// own brand palette (teal/naranja/magenta) instead of plain black-on-white: a tri-color header
+    /// stripe, a tinted info panel, a callout box for the legal declaration, and one card per signer
+    /// (avatar initial, status pill, timeline with colored bullets, single canonical signature hash —
+    /// see CertificateRecipientSummary.SignatureHash's doc comment for why it's one value now, not a
+    /// list) — see AuditCertificateInfo's doc comment for why the file's own hash is never printed
+    /// here. Paginates: NewPageIfNeeded starts a fresh page (repainting the header stripe) whenever a
+    /// block wouldn't fit on the current one, so an envelope with many signers never truncates
+    /// silently.</summary>
     private static void DrawCertificatePage(PdfDocument document, AuditCertificateInfo certificate)
     {
         const double marginX = 40;
         const double lineHeight = 15;
-        const double sectionGap = 10;
+        const double sectionGap = 16;
         const double signatureThumbWidth = 110;
         const double signatureThumbHeight = 42;
+        const double topStripeHeight = 5;
+        const double topMargin = 30;
+        const double cardPaddingX = 16;
+        const double cardPaddingY = 14;
+        const double avatarDiameter = 26;
 
-        var titleFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 16);
-        var headingFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 11);
+        var titleFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 19);
+        var subtitleFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 8.5);
+        var headingFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 12);
+        var nameFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 11.5);
         var bodyFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 9);
-        var labelFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 8);
+        var labelFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 7.5);
+        var tinyFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 7);
         var legalFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 7.5);
+        var pillFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 7.5);
+        var eyebrowFont = new XFont(PdfSharpFontResolver.DefaultFamilyName, 7);
 
         var page = document.AddPage();
         var pageWidth = page.Width.Point;
         var pageHeight = page.Height.Point;
         var gfx = XGraphics.FromPdfPage(page);
-        double y = 40;
+        double y;
+
+        void DrawTopStripe()
+        {
+            var bandWidth = pageWidth / 3.0;
+            gfx.DrawRectangle(new XSolidBrush(CertTeal), 0, 0, bandWidth, topStripeHeight);
+            gfx.DrawRectangle(new XSolidBrush(CertOrange), bandWidth, 0, bandWidth, topStripeHeight);
+            gfx.DrawRectangle(new XSolidBrush(CertMagenta), bandWidth * 2, 0, pageWidth - bandWidth * 2, topStripeHeight);
+        }
 
         void NewPageIfNeeded(double neededHeight)
         {
-            if (y + neededHeight <= pageHeight - 40) return;
+            if (y + neededHeight <= pageHeight - topMargin) return;
             gfx.Dispose();
             page = document.AddPage();
             gfx = XGraphics.FromPdfPage(page);
-            y = 40;
+            DrawTopStripe();
+            y = topStripeHeight + topMargin;
         }
 
+        DrawTopStripe();
+        y = topStripeHeight + topMargin;
+
+        // --- Header: logo + title + tagline, QR code (bordered) top-right ---
         var titleX = marginX;
         if (LogoBytes is not null)
         {
-            const double logoHeight = 42;
+            const double logoHeight = 36;
             using var logoStream = new MemoryStream(LogoBytes, 0, LogoBytes.Length, writable: false, publiclyVisible: true);
             using var logoImage = XImage.FromStream(logoStream);
             var logoWidth = logoHeight * (logoImage.PixelWidth / (double)logoImage.PixelHeight);
             gfx.DrawImage(logoImage, marginX, y, logoWidth, logoHeight);
             titleX = marginX + logoWidth + 14;
         }
-        gfx.DrawString("Certificado de Finalización", titleFont, XBrushes.Black, titleX, y + 26);
-        DrawVerificationQrCode(gfx, certificate.VerificationUrl, pageWidth - marginX - 70, y, 70);
-        y += 60;
+        gfx.DrawString("Certificado de Finalización", titleFont, new XSolidBrush(CertTextDark), titleX, y + 22);
+        gfx.DrawString("EVIDENCIA DE FIRMA ELECTRÓNICA · SDPP", subtitleFont, new XSolidBrush(CertTeal), titleX, y + 35);
 
-        gfx.DrawString($"Documento: {certificate.EnvelopeTitle}", bodyFont, XBrushes.Black, marginX, y); y += lineHeight;
-        gfx.DrawString($"Identificador del sobre: {certificate.EnvelopeId}", bodyFont, XBrushes.Black, marginX, y); y += lineHeight;
-        gfx.DrawString("Estado: Completado", bodyFont, XBrushes.Black, marginX, y); y += lineHeight;
-        gfx.DrawString($"Completado: {FormatCertificateTime(certificate.CompletedAtUtc)}", bodyFont, XBrushes.Black, marginX, y); y += lineHeight;
-        gfx.DrawString($"Firmantes: {certificate.Recipients.Count}", bodyFont, XBrushes.Black, marginX, y); y += lineHeight;
-        y = DrawWrappedText(
-            gfx, "Algoritmo de atestación criptográfica: ECDSA P-256 (SHA-256) — firma de la plataforma SDPP, no un certificado digital personal del firmante",
-            bodyFont, XBrushes.Black, marginX, y, pageWidth - 2 * marginX, lineHeight);
-        gfx.DrawString($"Hash SHA-256 del documento original: {certificate.OriginalSha256Hash}", bodyFont, XBrushes.Black, marginX, y);
-        y += lineHeight;
-        gfx.DrawString($"Hash SHA-256 del sobre: {certificate.EnvelopeHash}", bodyFont, XBrushes.Black, marginX, y);
-        y += lineHeight;
-        gfx.DrawString($"Verificar en: {certificate.VerificationUrl}", labelFont, new XSolidBrush(XColor.FromArgb(90, 90, 90)), marginX, y);
-        y += lineHeight + sectionGap;
+        // Box width fixed first, box position derived from it (right edge pinned to the margin) —
+        // drawing it the other way around (position first, width guessed) is what previously let
+        // the box's right edge run past the margin, with the caption overflowing past that.
+        const double qrSize = 60;
+        const double qrBoxWidth = qrSize + 16;
+        const double qrBoxHeight = qrSize + 28;
+        var qrBoxTop = y;
+        var qrBoxX = pageWidth - marginX - qrBoxWidth;
+        gfx.DrawRectangle(new XPen(CertPanelBorder, 1), XBrushes.White, qrBoxX, qrBoxTop, qrBoxWidth, qrBoxHeight);
+        DrawVerificationQrCode(gfx, certificate.VerificationUrl, qrBoxX + 8, qrBoxTop + 8, qrSize);
+        var qrCaption = "Verificar";
+        var qrCaptionSize = gfx.MeasureString(qrCaption, tinyFont);
+        gfx.DrawString(qrCaption, tinyFont, new XSolidBrush(CertTextMuted), qrBoxX + (qrBoxWidth - qrCaptionSize.Width) / 2, qrBoxTop + qrSize + 22);
 
-        y = DrawWrappedText(gfx, LegalDeclaration, legalFont, new XSolidBrush(XColor.FromArgb(80, 80, 80)), marginX, y, pageWidth - 2 * marginX, 10);
-        y += sectionGap;
+        // Whichever is taller wins — the title/logo block or the QR box — so the info panel drawn
+        // next always starts clear of both. The QR box previously ran a few points past a hardcoded
+        // "y += 58", so its bottom edge (and the last few pixels of the actual QR code inside it)
+        // ended up painted over by the info panel's own background. sectionGap is real breathing
+        // room, not just a rounding margin.
+        y = Math.Max(y + 46, qrBoxTop + qrBoxHeight) + sectionGap;
 
-        gfx.DrawString("Seguimiento de registro", headingFont, XBrushes.Black, marginX, y);
-        y += lineHeight * 0.8;
-        gfx.DrawLine(XPens.Black, marginX, y, pageWidth - marginX, y);
-        y += lineHeight;
+        // --- "Completado" status pill, right-aligned in its own row above the panel — giving it a
+        // row of its own (instead of sharing one with "DOCUMENTO") means it never has to coexist
+        // horizontally with a value that might wrap under it. ---
+        var statusText = "COMPLETADO";
+        var statusTextSize = gfx.MeasureString(statusText, pillFont);
+        var statusPillWidth = statusTextSize.Width + 16;
+        DrawPill(gfx, statusText, pillFont, pageWidth - marginX - statusPillWidth, y, CertTeal);
+        y += statusTextSize.Height + 7 + 10;
 
-        foreach (var recipient in certificate.Recipients)
+        // --- Info panel: tinted box grouping the envelope summary. Every value is drawn with
+        // DrawWrappedText — never assumed to fit next to its label on one line — because a hash is
+        // always 64 hex characters and a document title/URL is whatever length the user gave it;
+        // that assumption is exactly what let long values run past the panel's right edge before.
+        var infoRows = new (string Label, string Value)[]
         {
+            ("DOCUMENTO", certificate.EnvelopeTitle),
+            ("IDENTIFICADOR DEL SOBRE", certificate.EnvelopeId.ToString()),
+            ("COMPLETADO", FormatCertificateTime(certificate.CompletedAtUtc)),
+            ("FIRMANTES", certificate.Recipients.Count.ToString()),
+            ("ALGORITMO", "ECDSA P-256 (SHA-256) — atestación de plataforma SDPP, no PKI personal"),
+            ("HASH SHA-256 DEL DOCUMENTO ORIGINAL", certificate.OriginalSha256Hash),
+            ("HASH SHA-256 DEL SOBRE", certificate.EnvelopeHash),
+            ("VERIFICAR EN", certificate.VerificationUrl),
+        };
+        const double rowSpacing = 7;
+        var infoContentWidth = pageWidth - 2 * marginX - cardPaddingX * 2;
+        var rowLineCounts = infoRows.Select(r => Math.Max(1, CountWrappedLines(gfx, r.Value, bodyFont, infoContentWidth))).ToArray();
+        var infoContentHeight = infoRows.Select((_, i) => lineHeight + rowLineCounts[i] * lineHeight + rowSpacing).Sum();
+        var infoPanelHeight = cardPaddingY * 2 + infoContentHeight;
+        NewPageIfNeeded(infoPanelHeight);
+        gfx.DrawRectangle(new XPen(CertPanelBorder, 1), new XSolidBrush(CertPanelBg), marginX, y, pageWidth - 2 * marginX, infoPanelHeight);
+
+        var infoY = y + cardPaddingY;
+        var infoX = marginX + cardPaddingX;
+        foreach (var (label, value) in infoRows)
+        {
+            gfx.DrawString(label, eyebrowFont, new XSolidBrush(CertTeal), infoX, infoY);
+            infoY += lineHeight;
+            infoY = DrawWrappedText(gfx, value, bodyFont, new XSolidBrush(CertTextDark), infoX, infoY, infoContentWidth, lineHeight);
+            infoY += rowSpacing;
+        }
+        y += infoPanelHeight + sectionGap;
+
+        // --- Legal declaration: neutral callout box with a colored left accent bar ---
+        var legalWidth = pageWidth - 2 * marginX - cardPaddingX * 2;
+        var legalLines = CountWrappedLines(gfx, LegalDeclaration, legalFont, legalWidth);
+        var legalPanelHeight = cardPaddingY * 2 + legalLines * 10;
+        NewPageIfNeeded(legalPanelHeight);
+        gfx.DrawRectangle(new XPen(CertCardBorder, 1), new XSolidBrush(CertCalloutBg), marginX, y, pageWidth - 2 * marginX, legalPanelHeight);
+        gfx.DrawRectangle(new XSolidBrush(CertOrange), marginX, y, 3, legalPanelHeight);
+        DrawWrappedText(gfx, LegalDeclaration, legalFont, new XSolidBrush(CertTextMuted), marginX + cardPaddingX, y + cardPaddingY, legalWidth, 10);
+        y += legalPanelHeight + sectionGap;
+
+        // --- "Seguimiento de registro" section heading with a colored underline ---
+        NewPageIfNeeded(lineHeight * 2);
+        gfx.DrawString("Seguimiento de registro", headingFont, new XSolidBrush(CertTextDark), marginX, y);
+        y += lineHeight * 0.7;
+        gfx.DrawRectangle(new XSolidBrush(CertTeal), marginX, y, 36, 2.5);
+        y += lineHeight * 0.9;
+
+        var avatarPalette = new[] { CertTeal, CertOrange, CertMagenta };
+        for (var i = 0; i < certificate.Recipients.Count; i++)
+        {
+            var recipient = certificate.Recipients[i];
             var securityLevel = recipient.AuthMethodUsed switch
             {
                 "SdppSession" => SecurityLevelSdppSession,
@@ -469,59 +627,72 @@ public sealed class PdfSharpEnvelopeEmbeddingEngine(ILogger<PdfSharpEnvelopeEmbe
                 _ => "No determinado",
             };
 
-            // One signer's whole block (name/email/thumbnail + detail lines + one per signature
-            // hash + the cryptographic-attestation line) never splits across pages — if it doesn't
-            // fit, it starts clean on the next one.
-            var blockHeight = Math.Max(lineHeight * (7 + recipient.SignatureHashes.Count), signatureThumbHeight + lineHeight * 2) + sectionGap;
-            NewPageIfNeeded(blockHeight);
+            // Mirrors exactly the sequence drawn below, so the reserved height is always exact
+            // regardless of which optional lines (hash, cryptographic signature) are present.
+            // Tall enough to clear the security-level pill drawn at avatarDiameter-4 below the row
+            // start (its own bottom edge lands at roughly avatarDiameter+18) — this previously ran
+            // shorter than the pill itself, which let the first timeline row overlap it.
+            var headerBlockHeight = avatarDiameter + 22;
+            var timelineHeight = lineHeight * 3;
+            var hashLineHeight = recipient.SignatureHash is not null ? lineHeight * 0.95 : 0;
+            var cryptoLineHeight = recipient.CryptographicSignatureId is not null ? lineHeight * 0.95 : 0;
+            var cardContentHeight = headerBlockHeight + timelineHeight + hashLineHeight + cryptoLineHeight;
+            var cardHeight = Math.Max(cardContentHeight, signatureThumbHeight + headerBlockHeight) + cardPaddingY * 2;
 
-            var blockTopY = y;
-            gfx.DrawString(recipient.FullName, headingFont, XBrushes.Black, marginX, y);
-            y += lineHeight;
-            gfx.DrawString(recipient.Email, labelFont, new XSolidBrush(XColor.FromArgb(90, 90, 90)), marginX, y);
-            y += lineHeight * 1.2;
+            NewPageIfNeeded(cardHeight + sectionGap * 0.5);
 
-            gfx.DrawString($"Nivel de seguridad: {securityLevel}", bodyFont, XBrushes.Black, marginX + 12, y); y += lineHeight;
-            gfx.DrawString(
-                recipient.SentAtUtc is { } sent ? $"Enviado: {FormatCertificateTime(sent)}" : "Enviado: —",
-                bodyFont, XBrushes.Black, marginX + 12, y);
-            y += lineHeight;
-            gfx.DrawString(
-                recipient.ViewedAtUtc is { } viewed
-                    ? $"Visto: {FormatCertificateTime(viewed)}{(recipient.ViewedIpAddress is { } vip ? $" — IP {vip}" : "")}"
-                    : "Visto: —",
-                bodyFont, XBrushes.Black, marginX + 12, y);
-            y += lineHeight;
-            gfx.DrawString(
-                recipient.SignedAtUtc is { } signed
-                    ? $"Firmado: {FormatCertificateTime(signed)}{(recipient.SignedIpAddress is { } sip ? $" — IP {sip}" : "")}"
-                    : "Firmado: —",
-                bodyFont, XBrushes.Black, marginX + 12, y);
-            y += lineHeight;
+            var cardTopY = y;
+            gfx.DrawRectangle(new XPen(CertCardBorder, 1), XBrushes.White, marginX, cardTopY, pageWidth - 2 * marginX, cardHeight);
+            var accentColor = avatarPalette[i % avatarPalette.Length];
+            gfx.DrawRectangle(new XSolidBrush(accentColor), marginX, cardTopY, 4, cardHeight);
 
-            foreach (var signatureHash in recipient.SignatureHashes)
+            var contentX = marginX + cardPaddingX;
+            var rowY = cardTopY + cardPaddingY;
+
+            DrawInitialAvatar(gfx, recipient.FullName, contentX + avatarDiameter / 2, rowY + avatarDiameter / 2 - 2, avatarDiameter, accentColor);
+            var nameX = contentX + avatarDiameter + 10;
+            gfx.DrawString(recipient.FullName, nameFont, new XSolidBrush(CertTextDark), nameX, rowY + 6);
+            gfx.DrawString(recipient.Email, labelFont, new XSolidBrush(CertTextMuted), nameX, rowY + 19);
+            DrawPill(gfx, securityLevel, pillFont, nameX, rowY + avatarDiameter - 4, accentColor, filled: false);
+            rowY += headerBlockHeight + 4;
+
+            void DrawTimelineRow(string label, DateTime? at, string? ip)
             {
-                gfx.DrawString($"Hash de firma: {signatureHash}", labelFont, new XSolidBrush(XColor.FromArgb(90, 90, 90)), marginX + 12, y);
-                y += lineHeight * 0.9;
+                var done = at is not null;
+                var dotColor = done ? CertTeal : XColor.FromArgb(210, 210, 210);
+                gfx.DrawEllipse(new XSolidBrush(dotColor), contentX + 1, rowY - 4, 6, 6);
+                var text = done
+                    ? $"{label}: {FormatCertificateTime(at!.Value)}{(ip is { } ipValue ? $" — IP {ipValue}" : "")}"
+                    : $"{label}: —";
+                gfx.DrawString(text, bodyFont, new XSolidBrush(done ? CertTextDark : CertTextMuted), contentX + 14, rowY);
+                rowY += lineHeight;
             }
 
+            DrawTimelineRow("Enviado", recipient.SentAtUtc, null);
+            DrawTimelineRow("Visto", recipient.ViewedAtUtc, recipient.ViewedIpAddress);
+            DrawTimelineRow("Firmado", recipient.SignedAtUtc, recipient.SignedIpAddress);
+
+            if (recipient.SignatureHash is { } hash)
+            {
+                gfx.DrawString($"Hash de firma: {hash}", tinyFont, new XSolidBrush(CertTextMuted), contentX, rowY);
+                rowY += lineHeight * 0.95;
+            }
             if (recipient.CryptographicSignatureId is { } signatureId && recipient.CryptographicAlgorithm is { } algorithm)
             {
-                gfx.DrawString(
-                    $"Firma criptográfica: {signatureId} — {algorithm}", labelFont, new XSolidBrush(XColor.FromArgb(90, 90, 90)), marginX + 12, y);
-                y += lineHeight * 0.9;
+                gfx.DrawString($"Firma criptográfica: {signatureId} — {algorithm}", tinyFont, new XSolidBrush(CertTextMuted), contentX, rowY);
             }
 
-            // The signer's own signature image, top-right of their block — the same "contain,
-            // never distort" fit used for embedding it on the document itself.
+            // The signer's own signature image, top-right of their card — same "contain, never
+            // distort" fit used when embedding it on the document itself.
             if (recipient.SignatureImage is { Length: > 0 })
             {
-                var thumbX = pageWidth - marginX - signatureThumbWidth;
-                DrawImage(gfx, recipient.SignatureImage, thumbX, blockTopY, signatureThumbWidth, signatureThumbHeight);
-                gfx.DrawRectangle(XPens.LightGray, thumbX, blockTopY, signatureThumbWidth, signatureThumbHeight);
+                var thumbX = pageWidth - marginX - cardPaddingX - signatureThumbWidth;
+                var thumbY = cardTopY + cardPaddingY;
+                gfx.DrawRectangle(new XPen(CertCardBorder, 1), XBrushes.White, thumbX - 3, thumbY - 3, signatureThumbWidth + 6, signatureThumbHeight + 6);
+                DrawImage(gfx, recipient.SignatureImage, thumbX, thumbY, signatureThumbWidth, signatureThumbHeight);
             }
 
-            y = Math.Max(y, blockTopY + signatureThumbHeight) + sectionGap;
+            y = cardTopY + cardHeight + sectionGap * 0.6;
         }
 
         gfx.Dispose();

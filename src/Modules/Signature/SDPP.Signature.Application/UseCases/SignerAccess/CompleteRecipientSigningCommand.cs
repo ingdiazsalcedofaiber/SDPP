@@ -180,20 +180,27 @@ public sealed class CompleteRecipientSigningHandler(
                 .Select(r =>
                 {
                     var recipientFields = envelope.Fields.Where(f => f.RecipientId == r.Id).ToList();
-                    // One representative image per signer on the certificate — prefer an actual
-                    // Signature field over Initials/Stamp if they have more than one image-bearing
-                    // field, since that's the mark most recognizably "their signature".
-                    var representativeImage = imageTypePriority
+                    // One representative FIELD per signer on the certificate — same field for both
+                    // the thumbnail image and the hash printed next to it, so "Hash de firma" on the
+                    // certificate always matches the short hash caption stamped on the document page
+                    // under that exact image (see DrawSignatureCaption). Deliberately NOT
+                    // DocumentSignature.CanonicalPayloadHash here — that value is real and still
+                    // signed by the platform key (see CryptographicSignatureId/Algorithm below), but
+                    // it's a hash of the field hash plus identity/consent/timestamp context, so it
+                    // never equals the on-page value and printing it as "Hash de firma" only looked
+                    // like the two didn't match. Falls back to any field with a hash (no image) only
+                    // for the rare recipient with no Signature/Initials/Stamp field at all.
+                    var representativeField = imageTypePriority
                         .Select(type => recipientFields.FirstOrDefault(f => f.Type == type && f.SignatureImage is not null))
                         .FirstOrDefault(f => f is not null)
-                        ?.SignatureImage;
+                        ?? recipientFields.FirstOrDefault(f => f.SignatureHash is not null);
                     var cryptographicSignature = envelope.DocumentSignatures
                         .Where(s => s.RecipientId == r.Id)
                         .OrderByDescending(s => s.TimestampUtc)
                         .FirstOrDefault();
                     return new CertificateRecipientSummary(
                         r.FullName, r.Email, r.AuthMethodUsed, r.SentAtUtc, r.ViewedAtUtc, r.ViewedIpAddress, r.SignedAtUtc, r.SignedIpAddress,
-                        recipientFields.Where(f => f.SignatureHash is not null).Select(f => f.SignatureHash!).ToList(), representativeImage,
+                        representativeField?.SignatureHash, representativeField?.SignatureImage,
                         cryptographicSignature?.Id, cryptographicSignature is null ? null : "ECDSA P-256 (atestación de plataforma SDPP)");
                 })
                 .ToList();

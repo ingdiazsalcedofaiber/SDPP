@@ -254,35 +254,37 @@ export function ConvertWizardPage() {
                           p: 1.75,
                           cursor: "pointer",
                           textAlign: "center",
-                          borderRadius: 2,
+                          borderRadius: 2.5,
                           borderWidth: selected ? 2 : 1,
                           borderColor: selected ? category.color : "divider",
-                          bgcolor: selected ? `${category.color}14` : "background.paper",
+                          bgcolor: selected ? `${category.color}0D` : "background.paper",
+                          boxShadow: selected ? `0 8px 18px ${category.color}33` : "none",
                           transition: "transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease",
-                          "&:hover": { borderColor: category.color, transform: "translateY(-2px)", boxShadow: 3 },
+                          "&:hover": { borderColor: category.color, transform: "translateY(-2px)", boxShadow: `0 8px 18px ${category.color}2E` },
                         }}
                       >
                         {selected && (
-                          <CheckCircleIcon sx={{ position: "absolute", top: 6, right: 6, fontSize: 16, color: category.color }} />
+                          <CheckCircleIcon sx={{ position: "absolute", top: 6, right: 6, fontSize: 16, color: category.color, bgcolor: "#fff", borderRadius: "50%" }} />
                         )}
                         <Box
                           sx={{
-                            width: 36,
-                            height: 36,
+                            width: 38,
+                            height: 38,
                             mx: "auto",
                             mb: 0.75,
                             borderRadius: "50%",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            bgcolor: `${category.color}1F`,
-                            color: category.color,
+                            background: `linear-gradient(135deg, ${category.color}CC 0%, ${category.color} 100%)`,
+                            color: "#fff",
+                            boxShadow: `0 3px 8px ${category.color}4D`,
                             "& svg": { fontSize: 19 },
                           }}
                         >
                           {op.icon}
                         </Box>
-                        <Typography variant="body2" sx={{ fontWeight: selected ? 700 : 500, lineHeight: 1.3 }}>
+                        <Typography variant="body2" sx={{ fontWeight: selected ? 700 : 600, lineHeight: 1.3 }}>
                           {op.label}
                         </Typography>
                         {op.description && (

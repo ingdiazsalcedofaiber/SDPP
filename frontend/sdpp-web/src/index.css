@@ -1,3 +1,16 @@
+/* Self-hosted (not a Google Fonts CDN link) — this platform runs on an intranet with no
+   assumption of open internet egress at runtime (see README's "sin dependencias de servicios
+   cloud externos"), same reasoning that keeps the pdf.js worker and every other asset local.
+   Variable font: one file covers weights 400-800, so every <Typography fontWeight> already used
+   across the app renders its own real weight instead of the browser faking bold. */
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("/fonts/PlusJakartaSans-Variable.woff2") format("woff2-variations");
+}
+
 html,
 body,
 #root {
@@ -6,5 +19,5 @@ body,
 }
 
 body {
-  font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Plus Jakarta Sans", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
