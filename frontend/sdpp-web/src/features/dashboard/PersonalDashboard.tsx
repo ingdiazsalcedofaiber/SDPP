@@ -243,13 +243,32 @@ export function PersonalDashboard() {
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Conversiones por tipo de operación</Typography>
           {docsQuery.isPending ? (
             <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={24} /></Box>
+          ) : (overview?.conversionsByType.length ?? 0) === 0 ? (
+            <EmptyRow icon={<SwapHorizIcon />} text="Todavía no hay conversiones para graficar." />
           ) : (
             <BarChart
               dataset={(overview?.conversionsByType ?? []).map((d) => ({ ...d, label: translateOperationType(d.label) }))}
-              xAxis={[{ dataKey: "label", scaleType: "band" }]}
+              xAxis={[{ dataKey: "label", scaleType: "band", tickLabelStyle: { fill: BRAND_COLORS.textLight, fontSize: 11 } }]}
+              yAxis={[{ tickLabelStyle: { fill: BRAND_COLORS.textLight, fontSize: 11 } }]}
               series={[{ dataKey: "count", label: "Conversiones", color: BRAND_COLORS.teal }]}
               height={260}
-            />
+              borderRadius={10}
+              grid={{ horizontal: true }}
+              hideLegend
+              sx={{
+                "& .MuiBarChart-element": { fill: "url(#barFillGradient)" },
+                "& .MuiChartsAxis-line": { stroke: "rgba(15, 40, 38, 0.14)" },
+                "& .MuiChartsAxis-tick": { stroke: "rgba(15, 40, 38, 0.14)" },
+                "& .MuiChartsGrid-line": { stroke: "rgba(15, 40, 38, 0.08)", strokeDasharray: "3 4" },
+              }}
+            >
+              <defs>
+                <linearGradient id="barFillGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={BRAND_COLORS.teal} />
+                  <stop offset="100%" stopColor={BRAND_COLORS.teal} stopOpacity={0.55} />
+                </linearGradient>
+              </defs>
+            </BarChart>
           )}
         </Paper>
 
@@ -257,13 +276,36 @@ export function PersonalDashboard() {
           <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>Conversiones en el tiempo</Typography>
           {docsQuery.isPending ? (
             <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}><CircularProgress size={24} /></Box>
+          ) : (overview?.timeSeries.length ?? 0) === 0 ? (
+            <EmptyRow icon={<SwapHorizIcon />} text="Todavía no hay conversiones para graficar." />
           ) : (
             <LineChart
               dataset={overview?.timeSeries ?? []}
-              xAxis={[{ dataKey: "periodStart", scaleType: "band", valueFormatter: (v: string) => formatPeriodLabel(v, resolved.bucket) }]}
-              series={[{ dataKey: "count", label: "Conversiones", color: BRAND_COLORS.magenta, area: true }]}
+              xAxis={[{
+                dataKey: "periodStart", scaleType: "band", valueFormatter: (v: string) => formatPeriodLabel(v, resolved.bucket),
+                tickLabelStyle: { fill: BRAND_COLORS.textLight, fontSize: 11 },
+              }]}
+              yAxis={[{ tickLabelStyle: { fill: BRAND_COLORS.textLight, fontSize: 11 } }]}
+              series={[{ dataKey: "count", label: "Conversiones", color: BRAND_COLORS.magenta, area: true, curve: "monotoneX", showMark: true }]}
               height={260}
-            />
+              grid={{ horizontal: true }}
+              hideLegend
+              sx={{
+                "& .MuiLineChart-area": { fill: "url(#lineFillGradient)" },
+                "& .MuiLineChart-line": { strokeWidth: 2.5 },
+                "& .MuiLineChart-mark": { fill: "#fff", stroke: BRAND_COLORS.magenta, strokeWidth: 2 },
+                "& .MuiChartsAxis-line": { stroke: "rgba(15, 40, 38, 0.14)" },
+                "& .MuiChartsAxis-tick": { stroke: "rgba(15, 40, 38, 0.14)" },
+                "& .MuiChartsGrid-line": { stroke: "rgba(15, 40, 38, 0.08)", strokeDasharray: "3 4" },
+              }}
+            >
+              <defs>
+                <linearGradient id="lineFillGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={BRAND_COLORS.magenta} stopOpacity={0.4} />
+                  <stop offset="100%" stopColor={BRAND_COLORS.magenta} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+            </LineChart>
           )}
         </Paper>
       </Box>
