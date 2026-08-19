@@ -20,6 +20,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { logout, useAuthStore } from "./auth";
 import { SdppLogo } from "../shared/ui/SdppLogo";
 import { NotificationBell } from "../shared/ui/NotificationBell";
+import { OfflineQueueIndicator } from "../shared/ui/OfflineQueueIndicator";
 import { BRAND_COLORS } from "../shared/theme";
 
 const DRAWER_WIDTH = 240;
@@ -65,6 +66,7 @@ export function AppShell() {
           <SdppLogo />
           {user && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <OfflineQueueIndicator />
               <NotificationBell />
               <Box sx={{ width: "1px", height: 26, bgcolor: "rgba(15, 40, 38, 0.1)", mx: 0.25 }} />
               <Box

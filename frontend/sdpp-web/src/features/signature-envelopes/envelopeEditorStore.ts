@@ -23,8 +23,6 @@ export interface EditorField {
 interface EnvelopeEditorState {
   activeStep: number;
   file: File | null;
-  pdfBlob: Blob | null;
-  sourceDocumentId: string | null;
   envelopeId: string | null;
   title: string;
   message: string;
@@ -35,10 +33,12 @@ interface EnvelopeEditorState {
   armedFieldType: FieldType | null;
   activeRecipientId: string | null;
   dispatched: DispatchedRecipient[] | null;
+  // Set instead of dispatched when the whole envelope had to be queued for lack of connectivity
+  // (see shared/offline/enqueue.ts) — cleared once the queue actually sends it for real and
+  // envelopeId/dispatched get set, see EnvelopeEditorPage.tsx.
+  queuedIntentId: string | null;
   setActiveStep: (value: number) => void;
   setFile: (value: File | null) => void;
-  setPdfBlob: (value: Blob | null) => void;
-  setSourceDocumentId: (value: string | null) => void;
   setEnvelopeId: (value: string | null) => void;
   setTitle: (value: string) => void;
   setMessage: (value: string) => void;
@@ -52,14 +52,13 @@ interface EnvelopeEditorState {
   setArmedFieldType: (value: FieldType | null) => void;
   setActiveRecipientId: (value: string | null) => void;
   setDispatched: (value: DispatchedRecipient[] | null) => void;
+  setQueuedIntentId: (value: string | null) => void;
   reset: () => void;
 }
 
 const initialState = {
   activeStep: 0,
   file: null as File | null,
-  pdfBlob: null as Blob | null,
-  sourceDocumentId: null as string | null,
   envelopeId: null as string | null,
   title: "",
   message: "",
@@ -70,19 +69,22 @@ const initialState = {
   armedFieldType: null as FieldType | null,
   activeRecipientId: null as string | null,
   dispatched: null as DispatchedRecipient[] | null,
+  queuedIntentId: null as string | null,
 };
 
 /** Holds the whole "Nuevo sobre de firma" editor state outside the page component — same reason
- * as the conversion/signature wizards: the page unmounts on every route change. Recipients/fields
- * are added optimistically to local state right after each successful server call (the server is
- * the source of truth for ids, but round-tripping a full re-fetch after every click would make the
- * editor feel sluggish). */
+ * as the conversion wizard: the page unmounts on every route change. Authoring (recipients/fields)
+ * is entirely local-first: `recipientId`/`fieldId` here are always client-only `local-<uuid>` ids
+ * (see EnvelopeEditorPage.tsx) — nothing touches the network until the single "Enviar sobre" submit,
+ * which runs the whole create→recipients→fields→send sequence at once (immediately if online, or
+ * queued via shared/offline/enqueue.ts if not — see submitEnvelopeIntent.ts). This replaced an
+ * earlier design where every add/remove/move was its own immediate network call and only
+ * server-confirmed ids were ever stored — that made offline authoring impossible by construction,
+ * since nothing could exist locally without a round trip succeeding first. */
 export const useEnvelopeEditorStore = create<EnvelopeEditorState>((set) => ({
   ...initialState,
   setActiveStep: (value) => set({ activeStep: value }),
   setFile: (value) => set({ file: value }),
-  setPdfBlob: (value) => set({ pdfBlob: value }),
-  setSourceDocumentId: (value) => set({ sourceDocumentId: value }),
   setEnvelopeId: (value) => set({ envelopeId: value }),
   setTitle: (value) => set({ title: value }),
   setMessage: (value) => set({ message: value }),
@@ -101,5 +103,6 @@ export const useEnvelopeEditorStore = create<EnvelopeEditorState>((set) => ({
   setArmedFieldType: (value) => set({ armedFieldType: value }),
   setActiveRecipientId: (value) => set({ activeRecipientId: value }),
   setDispatched: (value) => set({ dispatched: value }),
+  setQueuedIntentId: (value) => set({ queuedIntentId: value }),
   reset: () => set({ ...initialState }),
 }));

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Paper from "@mui/material/Paper";
@@ -28,12 +29,18 @@ import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { downloadDocument, getDocumentStatus, requestConversion, uploadDocument } from "../../shared/api/documents";
+import { downloadDocument, getDocumentStatus } from "../../shared/api/documents";
 import { ApiError } from "../../shared/api/client";
 import type { OperationType } from "../../shared/api/types";
 import { BRAND_COLORS, CLASSIFICATION_COLORS } from "../../shared/theme";
 import { translateJobStatus } from "../../shared/translations";
+import { useConnectivityStore } from "../../shared/offline/connectivityStore";
+import { enqueueConversion } from "../../shared/offline/enqueue";
+import { processQueue } from "../../shared/offline/queueProcessor";
+import { submitConversionIntent } from "../../shared/offline/submitConversionIntent";
+import { useQueueStore } from "../../shared/offline/queueStore";
 import { useConversionWizardStore } from "./wizardStore";
 
 interface OperationDef {
@@ -152,39 +159,59 @@ export function ConvertWizardPage() {
   const setDocumentId = useConversionWizardStore((s) => s.setDocumentId);
   const jobId = useConversionWizardStore((s) => s.jobId);
   const setJobId = useConversionWizardStore((s) => s.setJobId);
+  const queuedIntentId = useConversionWizardStore((s) => s.queuedIntentId);
+  const setQueuedIntentId = useConversionWizardStore((s) => s.setQueuedIntentId);
   const resetWizard = useConversionWizardStore((s) => s.reset);
+
+  const isOnline = useConnectivityStore((s) => s.isOnline);
+  const queuedItem = useQueueStore((s) => s.items.find((i) => i.id === queuedIntentId));
+  const queuedResult = useQueueStore((s) => (queuedIntentId ? s.results[queuedIntentId] : undefined));
+  const clearQueueResult = useQueueStore((s) => s.clearResult);
+
+  // Once the queue processor actually runs this intent (immediately if connectivity returns while
+  // the page is still open, or on a later app boot), its real result lands in queueStore.results —
+  // pick it up here and switch to the normal polling view exactly as if the conversion had just
+  // been requested online.
+  useEffect(() => {
+    if (queuedResult?.kind === "conversion" && queuedIntentId) {
+      setDocumentId(queuedResult.documentId);
+      setJobId(queuedResult.jobId);
+      clearQueueResult(queuedIntentId);
+      setQueuedIntentId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queuedResult]);
 
   const isMerge = operationType === "Merge";
   const paramFields = PARAM_FIELDS[operationType] ?? [];
 
   const convertMutation = useMutation({
-    mutationFn: async () => {
-      const uploaded = await uploadDocument(file!);
+    // TanStack Query defaults mutations to networkMode: "online", which PAUSES mutationFn from
+    // ever running at all while navigator.onLine is false — its own onlineManager silently queues
+    // the call and only invokes mutationFn once IT detects connectivity again. That fights this
+    // feature directly: the whole point is to run the isOnline check ourselves and enqueue right
+    // away instead of leaving the request in TanStack Query's own (invisible, IndexedDB-less) hold
+    // state. "always" makes mutate() invoke mutationFn immediately regardless, so our own
+    // connectivityStore check below is the only thing deciding submit-now vs. enqueue.
+    networkMode: "always",
+    mutationFn: async (): Promise<{ kind: "immediate"; documentId: string; jobId: string } | { kind: "queued"; id: string }> => {
+      const payload = { file: file!, additionalFiles, operationType, operationParameters: operationParams };
 
-      // Merge is the one operation with more than one input document — every other file the
-      // user picked here gets uploaded too, and their ids are threaded through as an operation
-      // parameter (see ConversionRequestedConsumer.additionalDocumentIds on the worker).
-      const additionalIds: string[] = [];
-      for (const extra of additionalFiles) {
-        const extraUploaded = await uploadDocument(extra);
-        additionalIds.push(extraUploaded.documentId);
+      if (!isOnline) {
+        const id = await enqueueConversion(payload);
+        return { kind: "queued", id };
       }
 
-      const finalParams = additionalIds.length > 0
-        ? { ...operationParams, additionalDocumentIds: additionalIds.join(",") }
-        : operationParams;
-
-      const result = await requestConversion({
-        documentId: uploaded.documentId,
-        operationType,
-        operationParameters: finalParams,
-      });
-
-      return { documentId: uploaded.documentId, jobId: result.jobId };
+      const result = await submitConversionIntent({ ...payload, progress: {} });
+      return { kind: "immediate", ...result };
     },
-    onSuccess: ({ documentId: newDocumentId, jobId: newJobId }) => {
-      setDocumentId(newDocumentId);
-      setJobId(newJobId);
+    onSuccess: (result) => {
+      if (result.kind === "immediate") {
+        setDocumentId(result.documentId);
+        setJobId(result.jobId);
+      } else {
+        setQueuedIntentId(result.id);
+      }
       setActiveStep(1);
     },
   });
@@ -370,7 +397,35 @@ export function ConvertWizardPage() {
         </Paper>
       )}
 
-      {activeStep === 1 && (
+      {activeStep === 1 && queuedIntentId && !documentId && (
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="subtitle1" gutterBottom>
+            Estado del proceso
+          </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+            <CloudOffOutlinedIcon sx={{ color: BRAND_COLORS.orange }} />
+            <Typography sx={{ fontWeight: 600 }}>
+              {queuedItem?.status === "failed"
+                ? "No se pudo enviar"
+                : queuedItem?.status === "needs-login"
+                ? "Necesita iniciar sesión de nuevo"
+                : "Se enviará automáticamente cuando vuelva la conexión"}
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            {queuedItem?.status === "failed" || queuedItem?.status === "needs-login"
+              ? (queuedItem.lastError ?? "Quedó pendiente en la cola local de este equipo.")
+              : "El archivo y la operación quedaron guardados en este equipo — no hace falta que hagas nada más."}
+          </Typography>
+          {(queuedItem?.status === "failed" || queuedItem?.status === "needs-login") && (
+            <Button variant="outlined" sx={{ mt: 2 }} onClick={() => void processQueue()}>
+              Reintentar
+            </Button>
+          )}
+        </Paper>
+      )}
+
+      {activeStep === 1 && !(queuedIntentId && !documentId) && (
         <Paper sx={{ p: 3 }}>
           <Typography variant="subtitle1" gutterBottom>
             Estado del proceso

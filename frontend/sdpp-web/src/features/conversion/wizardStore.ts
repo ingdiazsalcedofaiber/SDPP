@@ -15,6 +15,10 @@ interface ConversionWizardState {
   operationParams: Record<string, string>;
   documentId: string | null;
   jobId: string | null;
+  // Set instead of documentId/jobId when the conversion request had to be queued for lack of
+  // connectivity (see shared/offline/enqueue.ts) — cleared once the queue actually runs it and
+  // documentId/jobId get set for real, see ConvertWizardPage.tsx.
+  queuedIntentId: string | null;
   setActiveStep: (value: number) => void;
   setFile: (value: File | null) => void;
   setAdditionalFiles: (value: Updater<File[]>) => void;
@@ -22,6 +26,7 @@ interface ConversionWizardState {
   setOperationParams: (value: Updater<Record<string, string>>) => void;
   setDocumentId: (value: string | null) => void;
   setJobId: (value: string | null) => void;
+  setQueuedIntentId: (value: string | null) => void;
   reset: () => void;
 }
 
@@ -33,6 +38,7 @@ const initialState = {
   operationParams: {} as Record<string, string>,
   documentId: null as string | null,
   jobId: null as string | null,
+  queuedIntentId: null as string | null,
 };
 
 /**
@@ -52,5 +58,6 @@ export const useConversionWizardStore = create<ConversionWizardState>((set) => (
   setOperationParams: (value) => set((state) => ({ operationParams: resolve(value, state.operationParams) })),
   setDocumentId: (value) => set({ documentId: value }),
   setJobId: (value) => set({ jobId: value }),
+  setQueuedIntentId: (value) => set({ queuedIntentId: value }),
   reset: () => set({ ...initialState }),
 }));

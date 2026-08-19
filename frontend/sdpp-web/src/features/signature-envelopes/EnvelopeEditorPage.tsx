@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -16,6 +16,7 @@ import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
 import SendIcon from "@mui/icons-material/Send";
 import DeleteIcon from "@mui/icons-material/Delete";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
@@ -28,14 +29,15 @@ import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import { Document, Page, pdfjs } from "react-pdf";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { uploadDocument, getDocumentBlob } from "../../shared/api/documents";
-import {
-  createEnvelope, addRecipient, removeRecipient, addField, updateField, removeField, sendEnvelope,
-} from "../../shared/api/signature";
 import type { FieldType, SigningMode } from "../../shared/api/signature";
 import { FIELD_TYPE_LABELS } from "../../shared/api/signature";
 import { ApiError } from "../../shared/api/client";
 import { BRAND_COLORS } from "../../shared/theme";
+import { useConnectivityStore } from "../../shared/offline/connectivityStore";
+import { enqueueEnvelope } from "../../shared/offline/enqueue";
+import { processQueue } from "../../shared/offline/queueProcessor";
+import { submitEnvelopeIntent } from "../../shared/offline/submitEnvelopeIntent";
+import { useQueueStore } from "../../shared/offline/queueStore";
 import { useEnvelopeEditorStore } from "./envelopeEditorStore";
 import { EditableFieldBox, NewFieldPlacementCatcher } from "./FieldOverlay";
 import type { FieldRect } from "./FieldOverlay";
@@ -78,59 +80,47 @@ export function EnvelopeEditorPage() {
     return recipient ? recipient.fullName.split(" ")[0] : "";
   };
 
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      const uploaded = await uploadDocument(s.file!);
-      const blob = await getDocumentBlob(uploaded.documentId);
-      const created = await createEnvelope({
-        sourceDocumentId: uploaded.documentId,
-        title: s.title,
-        message: s.message || undefined,
-        signingMode: s.signingMode,
-        dueDateUtc: s.dueDateUtc ? new Date(s.dueDateUtc).toISOString() : undefined,
-      });
-      return { documentId: uploaded.documentId, blob, envelopeId: created.envelopeId };
-    },
-    onSuccess: ({ documentId, blob, envelopeId }) => {
-      s.setSourceDocumentId(documentId);
-      s.setPdfBlob(blob);
-      s.setEnvelopeId(envelopeId);
-      s.setActiveStep(1);
-    },
-  });
+  const isOnline = useConnectivityStore((connectivity) => connectivity.isOnline);
+  const queuedItem = useQueueStore((q) => q.items.find((i) => i.id === s.queuedIntentId));
+  const queuedResult = useQueueStore((q) => (s.queuedIntentId ? q.results[s.queuedIntentId] : undefined));
+  const clearQueueResult = useQueueStore((q) => q.clearResult);
 
-  const addRecipientMutation = useMutation({
-    mutationFn: () => addRecipient(s.envelopeId!, newRecipientEmail, newRecipientName || newRecipientEmail, s.recipients.length + 1),
-    onSuccess: (result) => {
-      s.addRecipientLocal({ recipientId: result.recipientId, email: newRecipientEmail, fullName: newRecipientName || newRecipientEmail, order: s.recipients.length + 1 });
-      setNewRecipientEmail("");
-      setNewRecipientName("");
-    },
-  });
+  // Same "the queue processor may finish this after the page already moved on" pickup as
+  // ConvertWizardPage — once a queued envelope actually sends for real (immediately if
+  // connectivity returns while this page is still open, or on a later app boot), swap the "en
+  // espera" panel for the real access-token links with zero user action.
+  useEffect(() => {
+    if (queuedResult?.kind === "envelope" && s.queuedIntentId) {
+      s.setEnvelopeId(queuedResult.envelopeId);
+      s.setDispatched(queuedResult.dispatched);
+      clearQueueResult(s.queuedIntentId);
+      s.setQueuedIntentId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queuedResult]);
 
-  const removeRecipientMutation = useMutation({
-    mutationFn: (recipientId: string) => removeRecipient(s.envelopeId!, recipientId),
-    onSuccess: (_r, recipientId) => s.removeRecipientLocal(recipientId),
-  });
+  // Step 0–2 are entirely local now — adding a recipient, placing a field, dragging it, typing
+  // exact coordinates, none of it touches the network. Only "Enviar sobre" (submitMutation, below)
+  // does. Recipients/fields get a client-only `local-<uuid>` id here; submitEnvelopeIntent resolves
+  // those to real server ids when it actually runs (see envelopeEditorStore.ts's doc comment).
+  const addRecipientLocalHandler = () => {
+    s.addRecipientLocal({
+      recipientId: `local-${crypto.randomUUID()}`,
+      email: newRecipientEmail,
+      fullName: newRecipientName || newRecipientEmail,
+      order: s.recipients.length + 1,
+    });
+    setNewRecipientEmail("");
+    setNewRecipientName("");
+  };
 
-  const addFieldMutation = useMutation({
-    mutationFn: (rect: FieldRect) =>
-      addField(s.envelopeId!, {
-        recipientId: s.activeRecipientId!, type: s.armedFieldType!, pageNumber: currentPage, ...rect, required: requiredDefault,
-      }),
-    onSuccess: (result, rect) => {
-      s.addFieldLocal({
-        fieldId: result.fieldId, recipientId: s.activeRecipientId!, type: s.armedFieldType!, pageNumber: currentPage, ...rect, required: requiredDefault,
-      });
-      setSelectedFieldId(result.fieldId);
-    },
-  });
-
-  const updateFieldMutation = useMutation({
-    mutationFn: ({ fieldId, rect }: { fieldId: string; rect: FieldRect }) =>
-      updateField(s.envelopeId!, fieldId, rect.positionX, rect.positionY, rect.width, rect.height),
-    onSuccess: (_r, { fieldId, rect }) => s.updateFieldLocal(fieldId, rect),
-  });
+  const addFieldLocalHandler = (rect: FieldRect) => {
+    const fieldId = `local-${crypto.randomUUID()}`;
+    s.addFieldLocal({
+      fieldId, recipientId: s.activeRecipientId!, type: s.armedFieldType!, pageNumber: currentPage, ...rect, required: requiredDefault,
+    });
+    setSelectedFieldId(fieldId);
+  };
 
   // Numeric position/size editing — the remitente decides exactly where a field goes; dragging
   // with the mouse is one way, typing exact percentages is another. No cross-field clamping beyond
@@ -149,21 +139,49 @@ export function EnvelopeEditorPage() {
       width: selectedField.width, height: selectedField.height,
       ...patch,
     };
-    updateFieldMutation.mutate({ fieldId: selectedField.fieldId, rect });
+    s.updateFieldLocal(selectedField.fieldId, rect);
   };
 
-  const removeFieldMutation = useMutation({
-    mutationFn: (fieldId: string) => removeField(s.envelopeId!, fieldId),
-    onSuccess: (_r, fieldId) => {
-      s.removeFieldLocal(fieldId);
-      setSelectedFieldId((current) => (current === fieldId ? null : current));
-    },
-  });
+  const removeFieldLocalHandler = (fieldId: string) => {
+    s.removeFieldLocal(fieldId);
+    setSelectedFieldId((current) => (current === fieldId ? null : current));
+  };
 
-  const sendMutation = useMutation({
-    mutationFn: () => sendEnvelope(s.envelopeId!),
+  const submitMutation = useMutation({
+    // See ConvertWizardPage.tsx's convertMutation for why this is required: TanStack Query's
+    // default networkMode: "online" would otherwise silently pause this mutation itself whenever
+    // navigator.onLine is false, and mutationFn (including our own isOnline branch below) would
+    // never even start running until its own onlineManager decided to resume it.
+    networkMode: "always",
+    mutationFn: async () => {
+      const payload = {
+        file: s.file!,
+        title: s.title,
+        message: s.message || undefined,
+        signingMode: s.signingMode,
+        dueDateUtc: s.dueDateUtc ? new Date(s.dueDateUtc).toISOString() : undefined,
+        recipients: s.recipients.map((r) => ({ localId: r.recipientId, email: r.email, fullName: r.fullName, order: r.order })),
+        fields: s.fields.map((f) => ({
+          localId: f.fieldId, recipientLocalId: f.recipientId, type: f.type, pageNumber: f.pageNumber,
+          positionX: f.positionX, positionY: f.positionY, width: f.width, height: f.height, required: f.required,
+        })),
+      };
+
+      if (!isOnline) {
+        const id = await enqueueEnvelope(payload);
+        return { kind: "queued" as const, id };
+      }
+
+      const result = await submitEnvelopeIntent({ ...payload, progress: {} });
+      return { kind: "immediate" as const, ...result };
+    },
     onSuccess: (result) => {
-      s.setDispatched(result.dispatched);
+      if (result.kind === "immediate") {
+        s.setEnvelopeId(result.envelopeId);
+        s.setDispatched(result.dispatched);
+      } else {
+        s.setQueuedIntentId(result.id);
+      }
       s.setActiveStep(3);
     },
   });
@@ -213,18 +231,12 @@ export function EnvelopeEditorPage() {
             onChange={(e) => s.setDueDateUtc(e.target.value || null)} fullWidth sx={{ mb: 2 }} slotProps={{ inputLabel: { shrink: true } }}
           />
 
-          {createMutation.isError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {createMutation.error instanceof ApiError ? createMutation.error.message : "No se pudo crear el sobre."}
-            </Alert>
-          )}
-
           <Button
             size="large" variant="contained" fullWidth
-            disabled={!s.file || !s.title.trim() || createMutation.isPending}
-            onClick={() => createMutation.mutate()}
+            disabled={!s.file || !s.title.trim()}
+            onClick={() => s.setActiveStep(1)}
           >
-            {createMutation.isPending ? <CircularProgress size={20} /> : "Crear sobre y continuar"}
+            Continuar
           </Button>
         </Paper>
       )}
@@ -244,7 +256,7 @@ export function EnvelopeEditorPage() {
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>{r.fullName}</Typography>
                 <Typography variant="caption" color="text.secondary">{r.email}</Typography>
               </Box>
-              <IconButton size="small" onClick={() => removeRecipientMutation.mutate(r.recipientId)}>
+              <IconButton size="small" onClick={() => s.removeRecipientLocal(r.recipientId)}>
                 <DeleteIcon fontSize="small" />
               </IconButton>
             </Box>
@@ -255,18 +267,12 @@ export function EnvelopeEditorPage() {
             <TextField label="Nombre completo" size="small" value={newRecipientName} onChange={(e) => setNewRecipientName(e.target.value)} sx={{ flexGrow: 1, minWidth: 200 }} />
             <Button
               variant="outlined" startIcon={<PersonAddIcon />}
-              disabled={!newRecipientEmail.trim() || addRecipientMutation.isPending}
-              onClick={() => addRecipientMutation.mutate()}
+              disabled={!newRecipientEmail.trim()}
+              onClick={addRecipientLocalHandler}
             >
               Agregar
             </Button>
           </Box>
-
-          {addRecipientMutation.isError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {addRecipientMutation.error instanceof ApiError ? addRecipientMutation.error.message : "No se pudo agregar el firmante."}
-            </Alert>
-          )}
 
           <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
             <Button size="large" variant="contained" disabled={s.recipients.length === 0} onClick={() => s.setActiveStep(2)}>
@@ -276,7 +282,7 @@ export function EnvelopeEditorPage() {
         </Paper>
       )}
 
-      {s.activeStep === 2 && s.pdfBlob && (
+      {s.activeStep === 2 && s.file && (
         <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
           <Paper sx={{ p: 2, flexGrow: 1, minWidth: 320 }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mb: 2, flexWrap: "wrap" }}>
@@ -303,10 +309,10 @@ export function EnvelopeEditorPage() {
                 identical clicks landed at very different Y fractions zoomed vs. unzoomed). */}
             <Box sx={{ display: "flex", justifyContent: "center", alignItems: "flex-start", overflow: "auto", maxHeight: "70vh" }}>
               <Box ref={pageContainerRef} sx={{ position: "relative", display: "inline-block", lineHeight: 0, "& canvas": { display: "block" } }}>
-                <Document file={s.pdfBlob} onLoadSuccess={({ numPages }) => setPageCount(numPages)}>
+                <Document file={s.file} onLoadSuccess={({ numPages }) => setPageCount(numPages)}>
                   <Page pageNumber={currentPage} width={BASE_WIDTH * scale} renderTextLayer={false} renderAnnotationLayer={false} />
                 </Document>
-                <NewFieldPlacementCatcher pageContainerRef={pageContainerRef} armedType={s.armedFieldType} onPlace={(rect) => addFieldMutation.mutate(rect)} />
+                <NewFieldPlacementCatcher pageContainerRef={pageContainerRef} armedType={s.armedFieldType} onPlace={addFieldLocalHandler} />
                 {fieldsOnCurrentPage.map((f) => (
                   <EditableFieldBox
                     key={f.fieldId}
@@ -316,8 +322,8 @@ export function EnvelopeEditorPage() {
                     label={labelFor(f.recipientId)}
                     selected={selectedFieldId === f.fieldId}
                     onSelect={setSelectedFieldId}
-                    onCommit={(fieldId, rect) => updateFieldMutation.mutate({ fieldId, rect })}
-                    onDelete={(fieldId) => removeFieldMutation.mutate(fieldId)}
+                    onCommit={(fieldId, rect) => s.updateFieldLocal(fieldId, rect)}
+                    onDelete={removeFieldLocalHandler}
                   />
                 ))}
               </Box>
@@ -427,18 +433,18 @@ export function EnvelopeEditorPage() {
               </>
             )}
 
-            {sendMutation.isError && (
+            {submitMutation.isError && (
               <Alert severity="error" sx={{ mt: 2 }}>
-                {sendMutation.error instanceof ApiError ? sendMutation.error.message : "No se pudo enviar el sobre."}
+                {submitMutation.error instanceof ApiError ? submitMutation.error.message : "No se pudo enviar el sobre."}
               </Alert>
             )}
 
             <Button
               size="large" variant="contained" fullWidth startIcon={<SendIcon />} sx={{ mt: 3 }}
-              disabled={recipientsWithoutFields.length > 0 || sendMutation.isPending}
-              onClick={() => sendMutation.mutate()}
+              disabled={recipientsWithoutFields.length > 0 || submitMutation.isPending}
+              onClick={() => submitMutation.mutate()}
             >
-              {sendMutation.isPending ? <CircularProgress size={20} /> : "Enviar sobre"}
+              {submitMutation.isPending ? <CircularProgress size={20} /> : "Enviar sobre"}
             </Button>
             {recipientsWithoutFields.length > 0 && (
               <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
@@ -449,7 +455,30 @@ export function EnvelopeEditorPage() {
         </Box>
       )}
 
-      {s.activeStep === 3 && (
+      {s.activeStep === 3 && s.queuedIntentId && !s.dispatched && (
+        <Paper sx={{ p: 3, maxWidth: 640, mx: "auto", textAlign: "center" }}>
+          <CloudOffOutlinedIcon sx={{ fontSize: 48, color: BRAND_COLORS.orange, mb: 1 }} />
+          <Typography variant="h6" gutterBottom>
+            {queuedItem?.status === "failed"
+              ? "No se pudo enviar"
+              : queuedItem?.status === "needs-login"
+              ? "Necesita iniciar sesión de nuevo"
+              : "El sobre se enviará automáticamente"}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            {queuedItem?.status === "failed" || queuedItem?.status === "needs-login"
+              ? (queuedItem.lastError ?? "Quedó pendiente en la cola local de este equipo.")
+              : "En cuanto vuelva la conexión se creará y enviará solo — los enlaces para firmar aparecerán aquí, no hace falta que hagas nada más."}
+          </Typography>
+          {(queuedItem?.status === "failed" || queuedItem?.status === "needs-login") && (
+            <Button variant="outlined" onClick={() => void processQueue()}>
+              Reintentar
+            </Button>
+          )}
+        </Paper>
+      )}
+
+      {s.activeStep === 3 && s.dispatched && (
         <Paper sx={{ p: 3, maxWidth: 640, mx: "auto", textAlign: "center" }}>
           <CheckCircleIcon sx={{ fontSize: 48, color: BRAND_COLORS.teal, mb: 1 }} />
           <Typography variant="h6" gutterBottom>Sobre enviado correctamente</Typography>
