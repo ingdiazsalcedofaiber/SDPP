@@ -1,0 +1,102 @@
+# Desarrollo local con recarga en caliente — uso:
+#   docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.override.yml up -d
+#
+# Cada servicio de abajo reemplaza su imagen ya compilada (runtime-only, ver su Dockerfile) por la
+# imagen del SDK de .NET corriendo "dotnet watch run" contra el código fuente montado como volumen
+# — un cambio guardado en VSCode se recompila y reinicia solo, sin que haga falta reconstruir la
+# imagen Docker cada vez. Todo lo demás (connection strings, RabbitMQ, puertos, depends_on) se
+# hereda tal cual del docker-compose.yml base — este archivo solo agrega lo necesario para el modo
+# watch.
+#
+# conversion-worker se deja FUERA a propósito: su imagen instala LibreOffice/Ghostscript/Tesseract
+# (varios cientos de MB) — reinstalarlos en un contenedor de desarrollo efímero no vale la pena
+# para lo poco que cambia ese código; sigue reconstruyéndose con
+# `docker compose -f deploy/compose/docker-compose.yml build conversion-worker` como hasta ahora.
+#
+# DOTNET_USE_POLLING_FILE_WATCHER=true: los eventos de cambio de archivo (inotify) no siempre
+# atraviesan confiablemente el bind mount Windows -> WSL2 -> contenedor de Docker Desktop — el
+# watcher por sondeo es más lento pero siempre funciona.
+
+services:
+  documents-api:
+    image: mcr.microsoft.com/dotnet/sdk:9.0
+    build: !reset null
+    working_dir: /src
+    volumes:
+      - ../../:/src
+      - nuget-cache:/root/.nuget/packages
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    # poppler-utils: PopplerTextExtractor's pdftotext dependency (ver Dockerfile) — no viene en la
+    # imagen del SDK, se instala una vez al arrancar el contenedor.
+    command: >
+      sh -c "apt-get update -qq && apt-get install -y -qq --no-install-recommends poppler-utils > /dev/null &&
+             dotnet watch run --project src/Modules/Documents/SDPP.Documents.Api --urls http://0.0.0.0:8080 --non-interactive"
+
+  classification-api:
+    image: mcr.microsoft.com/dotnet/sdk:9.0
+    build: !reset null
+    working_dir: /src
+    volumes:
+      - ../../:/src
+      - nuget-cache:/root/.nuget/packages
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    command: dotnet watch run --project src/Modules/Classification/SDPP.Classification.Api --urls http://0.0.0.0:8080 --non-interactive
+
+  audit-api:
+    image: mcr.microsoft.com/dotnet/sdk:9.0
+    build: !reset null
+    working_dir: /src
+    volumes:
+      - ../../:/src
+      - nuget-cache:/root/.nuget/packages
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    command: dotnet watch run --project src/Modules/Audit/SDPP.Audit.Api --urls http://0.0.0.0:8080 --non-interactive
+
+  signature-api:
+    image: mcr.microsoft.com/dotnet/sdk:9.0
+    build: !reset null
+    working_dir: /src
+    volumes:
+      - ../../:/src
+      - nuget-cache:/root/.nuget/packages
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    # fonts-dejavu-core: PdfSharp necesita fuentes reales instaladas para el certificado/sello (ver
+    # Dockerfile: ttf-dejavu en la imagen Alpine) — equivalente en Debian.
+    command: >
+      sh -c "apt-get update -qq && apt-get install -y -qq --no-install-recommends fonts-dejavu-core > /dev/null &&
+             dotnet watch run --project src/Modules/Signature/SDPP.Signature.Api --urls http://0.0.0.0:8080 --non-interactive"
+
+  identity-api:
+    image: mcr.microsoft.com/dotnet/sdk:9.0
+    build: !reset null
+    working_dir: /src
+    volumes:
+      - ../../:/src
+      - nuget-cache:/root/.nuget/packages
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    command: dotnet watch run --project src/Modules/Identity/SDPP.Identity.Api --urls http://0.0.0.0:8080 --non-interactive
+
+  gateway:
+    image: mcr.microsoft.com/dotnet/sdk:9.0
+    build: !reset null
+    working_dir: /src
+    volumes:
+      - ../../:/src
+      - nuget-cache:/root/.nuget/packages
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    command: dotnet watch run --project src/Gateway/SDPP.Gateway --urls http://0.0.0.0:8080 --non-interactive
+
+volumes:
+  nuget-cache:
