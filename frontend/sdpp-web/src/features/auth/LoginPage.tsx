@@ -237,14 +237,33 @@ export function LoginPage() {
           )}
 
           {isLoading && (
-            <Box sx={{ display: "flex", mb: 2 }}>
-              <CircularProgress size={28} />
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+                px: 2.5,
+                py: 1.5,
+                mb: 2,
+                borderRadius: 999,
+                width: "fit-content",
+                bgcolor: `${BRAND_COLORS.teal}14`,
+              }}
+            >
+              <CircularProgress size={20} thickness={4} sx={{ color: BRAND_COLORS.teal }} />
+              <Typography variant="body2" sx={{ fontWeight: 600, color: BRAND_COLORS.teal }}>
+                Verificando tu cuenta…
+              </Typography>
             </Box>
           )}
 
+          {/* display:none (not unmounting) while loading — GIS renders its button once into this
+              node via renderButton in the effect below; unmounting the Box would destroy that
+              rendered iframe for good, since renderButton never gets called again afterwards. */}
           <Box
             ref={buttonRef}
             sx={{
+              display: isLoading ? "none" : "block",
               minHeight: 44,
               width: "fit-content",
               transformOrigin: "center",
