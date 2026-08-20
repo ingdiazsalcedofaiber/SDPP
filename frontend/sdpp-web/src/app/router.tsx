@@ -4,6 +4,7 @@ import { DashboardPage } from "../features/dashboard/DashboardPage";
 import { ConvertWizardPage } from "../features/conversion/ConvertWizardPage";
 import { EnvelopeInboxPage } from "../features/signature-envelopes/EnvelopeInboxPage";
 import { EnvelopeEditorPage } from "../features/signature-envelopes/EnvelopeEditorPage";
+import { QuickSignPage } from "../features/signature-envelopes/QuickSignPage";
 import { EnvelopeDetailPage } from "../features/signature-envelopes/EnvelopeDetailPage";
 import { EnvelopeSigningPage } from "../features/signature-envelopes/EnvelopeSigningPage";
 import { EnvelopeVerificationPage } from "../features/signature-envelopes/EnvelopeVerificationPage";
@@ -49,6 +50,7 @@ export const router = createBrowserRouter([
           { path: "convertir", element: <ConvertWizardPage /> },
           { path: "firmar", element: <EnvelopeInboxPage /> },
           { path: "firmar/nuevo", element: <EnvelopeEditorPage /> },
+          { path: "firmar/rapida", element: <QuickSignPage /> },
           { path: "firmar/:envelopeId", element: <EnvelopeDetailPage /> },
           { path: "auditoria", element: <AuditSearchPage /> },
           {

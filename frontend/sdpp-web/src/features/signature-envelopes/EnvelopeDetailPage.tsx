@@ -199,9 +199,24 @@ export function EnvelopeDetailPage() {
                 )}
               </Box>
               {isCreator && (r.status === "Sent" || r.status === "Viewed") && (
-                <Button size="small" startIcon={<RefreshIcon />} onClick={() => resendMutation.mutate(r.recipientId)} disabled={resendMutation.isPending}>
-                  Reenviar enlace
-                </Button>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "flex-end" }}>
+                  {/* Firma presencial only — a genuine remote signer must go through their own
+                      link/session, the creator can't sign on their behalf. This is specifically for
+                      retomar a "Firma en espera" (see EnvelopeSigningPage.tsx): same
+                      resendRecipientAccess call the matched-account "Firmar ahora" above uses, just
+                      scoped here to in-person recipients regardless of who's logged in. */}
+                  {r.inPerson && (
+                    <Button
+                      size="small" variant="contained" startIcon={<DrawIcon />}
+                      onClick={() => signNowMutation.mutate(r.recipientId)} disabled={signNowMutation.isPending}
+                    >
+                      Firmar ahora
+                    </Button>
+                  )}
+                  <Button size="small" startIcon={<RefreshIcon />} onClick={() => resendMutation.mutate(r.recipientId)} disabled={resendMutation.isPending}>
+                    Reenviar enlace
+                  </Button>
+                </Box>
               )}
             </Box>
           ))}

@@ -56,8 +56,10 @@ export function createEnvelope(input: CreateEnvelopeInput): Promise<{ envelopeId
   return apiClient.post("/api/v1/signature/envelopes", input);
 }
 
-export function addRecipient(envelopeId: string, email: string, fullName: string, order: number): Promise<{ recipientId: string }> {
-  return apiClient.post(`/api/v1/signature/envelopes/${envelopeId}/recipients`, { email, fullName, order });
+export function addRecipient(
+  envelopeId: string, email: string, fullName: string, order: number, inPerson = false,
+): Promise<{ recipientId: string }> {
+  return apiClient.post(`/api/v1/signature/envelopes/${envelopeId}/recipients`, { email, fullName, order, inPerson });
 }
 
 export function removeRecipient(envelopeId: string, recipientId: string): Promise<void> {
@@ -117,6 +119,11 @@ export interface EnvelopeSummary {
   createdAtUtc: string;
   dueDateUtc: string | null;
   completedAtUtc: string | null;
+  // The two distinct reasons an envelope can appear under scope="pending" — see
+  // ListEnvelopesQuery.cs's doc comment on EnvelopeSummaryDto. Only meaningful for that scope;
+  // "all"/"sent" results carry them too but the inbox page ignores them there.
+  isMyTurnToSign: boolean;
+  hasPendingInPersonSignature: boolean;
 }
 
 export function listEnvelopes(scope: "sent" | "pending" | "all"): Promise<EnvelopeSummary[]> {
@@ -135,6 +142,7 @@ export interface RecipientDetail {
   signedAtUtc: string | null;
   declinedAtUtc: string | null;
   declineReason: string | null;
+  inPerson: boolean;
 }
 
 export interface FieldDetail {

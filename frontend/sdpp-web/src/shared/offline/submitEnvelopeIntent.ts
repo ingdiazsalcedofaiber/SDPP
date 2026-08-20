@@ -53,7 +53,7 @@ export async function submitEnvelopeIntent(
   progress.recipientIdMap ??= {};
   for (const recipient of intent.recipients) {
     if (progress.recipientIdMap[recipient.localId]) continue;
-    const result = await addRecipient(progress.envelopeId, recipient.email, recipient.fullName, recipient.order);
+    const result = await addRecipient(progress.envelopeId, recipient.email, recipient.fullName, recipient.order, recipient.inPerson);
     progress.recipientIdMap[recipient.localId] = result.recipientId;
     await onProgress?.(progress);
   }

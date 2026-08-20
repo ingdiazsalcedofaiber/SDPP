@@ -27,6 +27,7 @@ export interface EnvelopeIntentRecipient {
   email: string;
   fullName: string;
   order: number;
+  inPerson: boolean;
 }
 
 export interface EnvelopeIntentField {

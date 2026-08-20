@@ -15,6 +15,8 @@ import Paper from "@mui/material/Paper";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import HomeIcon from "@mui/icons-material/Home";
+import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutlineOutlined";
 import DrawIcon from "@mui/icons-material/Draw";
 import VerifiedIcon from "@mui/icons-material/Verified";
 import HighlightOffIcon from "@mui/icons-material/HighlightOff";
@@ -128,12 +130,23 @@ export function EnvelopeSigningPage() {
     onSuccess: () => setDeclineDialogOpen(false),
   });
 
+  // Three states, mirroring RecipientAccessAuthorization.CanAct on the backend: a matched SDPP
+  // account needs its own session; an unmatched external recipient normally needs an OTP-verified
+  // session token — EXCEPT when requiresOtp is also false, which only happens for an in-person
+  // recipient (see EnvelopeRecipient.InPerson) — there the raw link itself is enough, no further
+  // step needed here at all.
   const isAuthorized = view
     ? view.requiresSdppLogin
       ? authStatus === "authenticated" && authUser?.email === view.recipientEmail
-      : sessionToken !== null
+      : view.requiresOtp
+        ? sessionToken !== null
+        : true
     : false;
-  const hasConsented = view ? view.consentAccepted || consentGiven : false;
+  // Deliberately local-only, NOT view.consentAccepted — "Firma en espera" (below) sends the signer
+  // back to / mid-session with nothing submitted yet, and the whole point of resuming later is that
+  // they see and accept the consent screen again, every time, rather than a server-remembered
+  // acceptance from a possibly much earlier visit silently skipping it.
+  const hasConsented = consentGiven;
 
   const setFieldText = (fieldId: string, text: string) => setValues((prev) => ({ ...prev, [fieldId]: { ...prev[fieldId], text } }));
   const setFieldImage = (fieldId: string, blob: Blob, method: SignatureMethodUsed) =>
@@ -171,25 +184,38 @@ export function EnvelopeSigningPage() {
           <Paper sx={{ p: 4, maxWidth: 480, mx: "auto", textAlign: "center" }}>
             <CheckCircleIcon sx={{ fontSize: 48, color: BRAND_COLORS.teal, mb: 1 }} />
             <Typography variant="h6" gutterBottom>Firma registrada correctamente</Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
               {completed.envelopeCompleted
                 ? "Todos los firmantes completaron el documento. El sobre quedó marcado como completado."
                 : "Tu firma quedó registrada. El documento continúa con el siguiente firmante."}
             </Typography>
+            {/* Mainly for the "firma presencial" kiosk case: staff hands the device back and needs
+                a way out of this recipient-scoped page without typing a URL — an anonymous external
+                signer clicking this just lands on /login, harmless since they have nothing to go
+                "back" to anyway. */}
+            <Button variant="contained" startIcon={<HomeIcon />} onClick={() => navigate("/")}>
+              Volver al inicio
+            </Button>
           </Paper>
         )}
 
         {view && !completed && view.recipientStatus === "Declined" && (
           <Paper sx={{ p: 4, maxWidth: 480, mx: "auto", textAlign: "center" }}>
             <HighlightOffIcon sx={{ fontSize: 48, color: "#B23A2E", mb: 1 }} />
-            <Typography variant="h6">Ya rechazaste este documento</Typography>
+            <Typography variant="h6" gutterBottom>Ya rechazaste este documento</Typography>
+            <Button variant="contained" startIcon={<HomeIcon />} sx={{ mt: 2 }} onClick={() => navigate("/")}>
+              Volver al inicio
+            </Button>
           </Paper>
         )}
 
         {view && !completed && view.recipientStatus === "Signed" && (
           <Paper sx={{ p: 4, maxWidth: 480, mx: "auto", textAlign: "center" }}>
             <CheckCircleIcon sx={{ fontSize: 48, color: BRAND_COLORS.teal, mb: 1 }} />
-            <Typography variant="h6">Ya firmaste este documento</Typography>
+            <Typography variant="h6" gutterBottom>Ya firmaste este documento</Typography>
+            <Button variant="contained" startIcon={<HomeIcon />} sx={{ mt: 2 }} onClick={() => navigate("/")}>
+              Volver al inicio
+            </Button>
           </Paper>
         )}
 
@@ -407,6 +433,15 @@ export function EnvelopeSigningPage() {
                 onClick={() => completeMutation.mutate()}
               >
                 {completeMutation.isPending ? <CircularProgress size={20} /> : "Completar firma"}
+              </Button>
+              {/* Nothing is actually persisted server-side until "Completar firma" (see
+                  CompleteRecipientSigningCommand's doc comment) — so this is just navigation, no
+                  API call. To resume: the creator reopens this same recipient from the envelope
+                  detail page ("Firmar ahora" on a firma presencial pendiente), which mints a fresh
+                  access link and lands back here — starting over from consent on purpose, see
+                  hasConsented's doc comment above. */}
+              <Button fullWidth variant="outlined" startIcon={<PauseCircleOutlineIcon />} sx={{ mb: 1.5 }} onClick={() => navigate("/")}>
+                Firma en espera
               </Button>
               <Button fullWidth color="error" onClick={() => setDeclineDialogOpen(true)}>
                 Rechazar documento

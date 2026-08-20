@@ -33,6 +33,7 @@ import type { FieldType, SigningMode } from "../../shared/api/signature";
 import { FIELD_TYPE_LABELS } from "../../shared/api/signature";
 import { ApiError } from "../../shared/api/client";
 import { BRAND_COLORS } from "../../shared/theme";
+import { isValidEmail } from "../../shared/utils/validation";
 import { useConnectivityStore } from "../../shared/offline/connectivityStore";
 import { enqueueEnvelope } from "../../shared/offline/enqueue";
 import { processQueue } from "../../shared/offline/queueProcessor";
@@ -160,7 +161,10 @@ export function EnvelopeEditorPage() {
         message: s.message || undefined,
         signingMode: s.signingMode,
         dueDateUtc: s.dueDateUtc ? new Date(s.dueDateUtc).toISOString() : undefined,
-        recipients: s.recipients.map((r) => ({ localId: r.recipientId, email: r.email, fullName: r.fullName, order: r.order })),
+        // inPerson is always false here — this editor is the multi-recipient/remote flow; see
+        // QuickSignPage for the presencial fast path (still the same submitEnvelopeIntent/backend
+        // underneath, just a different, single-recipient authoring UI).
+        recipients: s.recipients.map((r) => ({ localId: r.recipientId, email: r.email, fullName: r.fullName, order: r.order, inPerson: false })),
         fields: s.fields.map((f) => ({
           localId: f.fieldId, recipientLocalId: f.recipientId, type: f.type, pageNumber: f.pageNumber,
           positionX: f.positionX, positionY: f.positionY, width: f.width, height: f.height, required: f.required,
@@ -262,12 +266,20 @@ export function EnvelopeEditorPage() {
             </Box>
           ))}
 
-          <Box sx={{ display: "flex", gap: 1, mt: 2, flexWrap: "wrap" }}>
-            <TextField label="Correo" size="small" value={newRecipientEmail} onChange={(e) => setNewRecipientEmail(e.target.value)} sx={{ flexGrow: 1, minWidth: 200 }} />
-            <TextField label="Nombre completo" size="small" value={newRecipientName} onChange={(e) => setNewRecipientName(e.target.value)} sx={{ flexGrow: 1, minWidth: 200 }} />
+          <Box sx={{ display: "flex", gap: 1, mt: 2, flexWrap: "wrap", alignItems: "flex-start" }}>
+            <TextField
+              label="Correo" type="email" size="small" value={newRecipientEmail} onChange={(e) => setNewRecipientEmail(e.target.value)}
+              error={newRecipientEmail.trim() !== "" && !isValidEmail(newRecipientEmail)}
+              helperText={newRecipientEmail.trim() !== "" && !isValidEmail(newRecipientEmail) ? "Correo inválido" : " "}
+              sx={{ flexGrow: 1, minWidth: 200 }}
+            />
+            <TextField
+              label="Nombre completo" size="small" value={newRecipientName} onChange={(e) => setNewRecipientName(e.target.value)}
+              helperText=" " sx={{ flexGrow: 1, minWidth: 200 }}
+            />
             <Button
-              variant="outlined" startIcon={<PersonAddIcon />}
-              disabled={!newRecipientEmail.trim()}
+              variant="outlined" startIcon={<PersonAddIcon />} sx={{ mt: 0.25 }}
+              disabled={!isValidEmail(newRecipientEmail)}
               onClick={addRecipientLocalHandler}
             >
               Agregar
