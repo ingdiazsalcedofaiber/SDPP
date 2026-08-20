@@ -62,6 +62,39 @@ public sealed class InternalServiceKeyFilter(IConfiguration configuration) : IEn
     }
 }
 
+/// <summary>
+/// Stricter sibling of InternalServiceKeyFilter: requires the shared key unconditionally, with NO
+/// "any authenticated session passes" fallback. Use this — never InternalServiceKeyFilter — for an
+/// endpoint that is genuinely internal-only (no legitimate direct end-user/browser caller exists at
+/// all, e.g. Documents.Api's /lock and /signed-version, Audit.Api's /records/export and
+/// /records/integrity). InternalServiceKeyHandler (the outbound half) always attaches the key on
+/// every server-to-server call regardless of whether a user session is also being forwarded, so
+/// switching a genuinely-internal endpoint to this filter never breaks a legitimate caller — it only
+/// closes the gap where "I happen to be logged in as *some* SDPP user" was being accepted as
+/// equivalent to "I am the Signature module calling on the platform's behalf", which let any
+/// authenticated user reach an endpoint whose group-level role policy was bypassed by the
+/// .AllowAnonymous() this filter pattern requires (see the incident this fixed: /records/export
+/// leaking the full audit trail to non-Auditor users, and /lock letting any user irreversibly lock
+/// another user's document).
+/// </summary>
+public sealed class InternalServiceKeyOnlyFilter(IConfiguration configuration) : IEndpointFilter
+{
+    private const string HeaderName = "X-SDPP-Internal-Key";
+
+    public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var configuredKey = configuration["Services:InternalApiKey"];
+        var providedKey = context.HttpContext.Request.Headers[HeaderName].ToString();
+        if (!string.IsNullOrEmpty(configuredKey) && !string.IsNullOrEmpty(providedKey) &&
+            CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(configuredKey), Encoding.UTF8.GetBytes(providedKey)))
+        {
+            return await next(context);
+        }
+
+        return Results.Unauthorized();
+    }
+}
+
 public static class InternalServiceKeyExtensions
 {
     public static IServiceCollection AddSdppInternalServiceKey(this IServiceCollection services)

@@ -7,20 +7,19 @@ using SDPP.Signature.Application.Ports;
 
 namespace SDPP.Signature.Application.UseCases.SignerAccess;
 
-/// <summary>PLAINTEXT CODE IS TEMPORARY — Phase 1 has no email infrastructure yet (see the module
-/// redesign plan's Phase 3), so there is currently no other way to deliver the OTP to an external
-/// recipient than returning it here for the frontend/tester to use directly. The code itself is
-/// real (cryptographically random, hashed at rest, time/attempt-limited) — only the delivery
-/// channel is deferred. Once Phase 3 wires a real IEmailSender, this field must be removed from the
-/// response; leaving it would let anyone who can see the HTTP response bypass the OTP's whole
-/// purpose.</summary>
-public sealed record RequestOtpResult(string Code);
+/// <summary>Empty on purpose — the code itself must never appear in the HTTP response (see
+/// RequestOtpHandler: it's emailed, not returned). An earlier version of this returned the code
+/// directly because no real email delivery existed yet; that made the OTP factor worthless (anyone
+/// who could see the response — not just the real recipient's inbox — could read the code), so once
+/// IEmailSender had a real SMTP implementation (see SmtpEmailSender) this was fixed to actually use
+/// it instead.</summary>
+public sealed record RequestOtpResult;
 
 public sealed record RequestOtpCommand(string RawToken) : ICommand<RequestOtpResult>;
 
 public sealed class RequestOtpHandler(
     ISignerAccessChallengeRepository challengeRepository, ISignatureEnvelopeRepository envelopeRepository, IUnitOfWork unitOfWork,
-    ICurrentActor currentActor, IIntegrationEventPublisher integrationEventPublisher)
+    ICurrentActor currentActor, IIntegrationEventPublisher integrationEventPublisher, IEmailSender emailSender)
     : IRequestHandler<RequestOtpCommand, Result<RequestOtpResult>>
 {
     private static readonly TimeSpan OtpLifetime = TimeSpan.FromMinutes(10);
@@ -61,6 +60,23 @@ public sealed class RequestOtpHandler(
             Guid.NewGuid(), DateTime.UtcNow, envelope!.Id, recipient.Id, recipient.Email, currentActor.IpAddress, currentActor.UserAgent),
             cancellationToken);
 
-        return Result.Success(new RequestOtpResult(code));
+        // The code is delivered ONLY here — never in the API response (see RequestOtpResult's doc
+        // comment on why that matters). Best-effort: a delivery failure shouldn't roll back an
+        // already-issued, already-hashed-and-stored challenge, and SmtpEmailSender/LoggingEmailSender
+        // each log their own outcome (see CompleteRecipientSigningCommand's identical reasoning for
+        // the certificate email).
+        try
+        {
+            await emailSender.SendAsync(
+                recipient.Email, "Código de verificación — SDPP",
+                $"<p>Tu código de verificación para firmar \"<strong>{envelope!.Title}</strong>\" es:</p><p style=\"font-size:24px;font-weight:700;letter-spacing:4px;\">{code}</p><p>Vence en 10 minutos.</p>",
+                cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            // Best-effort by design — see the comment above.
+        }
+
+        return Result.Success(new RequestOtpResult());
     }
 }

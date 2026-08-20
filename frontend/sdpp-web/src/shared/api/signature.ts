@@ -260,11 +260,10 @@ export function getEnvelopeAccessDocumentBlob(token: string): Promise<Blob> {
   return publicApiClient.getBlob(`/api/v1/signature/access/${token}/document`);
 }
 
-/** code is returned in plaintext only because Phase 1 has no email delivery yet — see the backend's
- * RequestOtpResult doc comment. The frontend must never display this to the recipient once real
- * email delivery lands; today, showing it is the only way the "digitá el código" step is reachable
- * at all without an inbox to check. */
-export function requestOtp(token: string): Promise<{ code: string }> {
+/** The code itself is never in the response — it's emailed (see the backend's RequestOtpResult doc
+ * comment). This resolves once the send was attempted, not once it's actually in the recipient's
+ * inbox. */
+export function requestOtp(token: string): Promise<void> {
   return publicApiClient.post(`/api/v1/signature/access/${token}/otp/request`);
 }
 

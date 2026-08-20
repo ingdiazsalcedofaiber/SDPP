@@ -12,7 +12,7 @@ public sealed record DownloadDocumentQuery(Guid DocumentId) : IQuery<DownloadDoc
 /// Streams the stored bytes for any document — the original upload or a conversion's output,
 /// both of which are just rows in the same Documents table (see docs/03-data/er-model.md).
 /// </summary>
-public sealed class DownloadDocumentHandler(IDocumentRepository repository, IBlobStorage blobStorage)
+public sealed class DownloadDocumentHandler(IDocumentRepository repository, IBlobStorage blobStorage, ICurrentActor currentActor)
     : IRequestHandler<DownloadDocumentQuery, Result<DownloadDocumentResult>>
 {
     public async Task<Result<DownloadDocumentResult>> Handle(DownloadDocumentQuery request, CancellationToken cancellationToken)
@@ -21,6 +21,10 @@ public sealed class DownloadDocumentHandler(IDocumentRepository repository, IBlo
         if (document is null)
         {
             return Result.Failure<DownloadDocumentResult>("El documento no existe.", "DOCUMENT_NOT_FOUND");
+        }
+        if (!DocumentAuthorization.CanView(document, currentActor))
+        {
+            return Result.Failure<DownloadDocumentResult>("No tienes permiso para descargar este documento.", "FORBIDDEN");
         }
 
         var content = await blobStorage.OpenReadAsync(document.StorageLocation, cancellationToken);

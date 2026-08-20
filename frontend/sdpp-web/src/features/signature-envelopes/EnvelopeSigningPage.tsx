@@ -88,13 +88,7 @@ export function EnvelopeSigningPage() {
 
   const requestOtpMutation = useMutation({
     mutationFn: () => requestOtp(token!),
-    onSuccess: (result) => {
-      setOtpRequested(true);
-      // Phase 1 has no email delivery yet — see requestOtp's doc comment. Pre-filling is a
-      // deliberate, temporary stand-in for "check your inbox", not something to keep once real
-      // email exists.
-      setOtpCode(result.code);
-    },
+    onSuccess: () => setOtpRequested(true),
   });
 
   const verifyOtpMutation = useMutation({
@@ -251,11 +245,11 @@ export function EnvelopeSigningPage() {
                 ) : (
                   <>
                     <Alert severity="info" sx={{ mb: 2 }}>
-                      El envío de correo automático todavía no está activo — tu código ya quedó prellenado abajo.
+                      Te enviamos un código de 6 dígitos por correo. Revisa tu bandeja de entrada (y spam) e ingrésalo abajo.
                     </Alert>
                     <TextField
                       label="Código de verificación" value={otpCode} onChange={(e) => setOtpCode(e.target.value)}
-                      fullWidth sx={{ mb: 2 }}
+                      fullWidth sx={{ mb: 2 }} autoFocus
                     />
                     {verifyOtpMutation.isError && (
                       <Alert severity="error" sx={{ mb: 2 }}>

@@ -21,24 +21,26 @@ public static class AuditEndpoints
 
         // Internal, service-to-service only (never reachable by a browser session, even an
         // Auditor's) — consumed by Signature.Api's public envelope verifier. Overrides the group's
-        // RequireAuthorization with the same AllowAnonymous+InternalServiceKeyFilter pattern
-        // Documents.Api uses for its own internal endpoints (see DocumentEndpoints.cs). Returns only
-        // an intact/count summary, never the underlying records — the public verifier must not leak
-        // actor emails/IPs/payloads.
+        // RequireAuthorization with InternalServiceKeyOnlyFilter (NOT InternalServiceKeyFilter —
+        // that one also accepts a bare authenticated session, which would have let ANY logged-in
+        // user, not just Auditor/Administrador, bypass the group's AuditorOrAdmin policy via
+        // .AllowAnonymous() and reach this directly; see InternalServiceKeyOnlyFilter's doc
+        // comment). Returns only an intact/count summary, never the underlying records — the public
+        // verifier must not leak actor emails/IPs/payloads.
         group.MapGet("/records/integrity", VerifyIntegrityAsync)
             .AllowAnonymous()
-            .AddEndpointFilter<InternalServiceKeyFilter>()
+            .AddEndpointFilter<InternalServiceKeyOnlyFilter>()
             .WithName("VerifyAuditIntegrity")
             .Produces<AuditIntegrityResult>();
 
         // Internal, service-to-service only — consumed by Signature.Api's Evidence Package export
         // (itself gated by envelope ownership, same check as the certificate download), never
-        // reachable directly by a browser. Unlike /records/integrity, returns full record detail —
-        // appropriate here since an Evidence Package is a private authenticated artifact, not the
-        // anonymous public verifier.
+        // reachable directly by a browser. InternalServiceKeyOnlyFilter for the same reason as
+        // /records/integrity above — this returns full record detail (actor emails/IPs/payloads),
+        // so a bare-session bypass here was the more serious half of that same bug.
         group.MapGet("/records/export", ExportRecordsAsync)
             .AllowAnonymous()
-            .AddEndpointFilter<InternalServiceKeyFilter>()
+            .AddEndpointFilter<InternalServiceKeyOnlyFilter>()
             .WithName("ExportAuditRecords")
             .Produces<IReadOnlyList<AuditRecordExportDto>>();
     }

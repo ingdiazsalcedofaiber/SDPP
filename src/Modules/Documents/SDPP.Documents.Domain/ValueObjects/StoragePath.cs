@@ -24,7 +24,25 @@ public sealed class StoragePath : ValueObject
     public const string BucketName = "sdpp-documents";
 
     public static StoragePath ForDocument(Guid documentId, string originalFileName) =>
-        new(BucketName, $"{documentId:N}/{originalFileName}");
+        new(BucketName, $"{documentId:N}/{SanitizeForObjectKey(originalFileName)}");
+
+    // The doc comment above promises "never a filesystem path" — this is what actually makes that
+    // true, rather than just asserting it. originalFileName is whatever the uploader's browser sent
+    // in the multipart Content-Disposition header (fully attacker-controlled, e.g. "../../x" or a
+    // name embedding "/"), and previously flowed into the object key completely unsanitized. The
+    // GUID prefix already stops any cross-document collision/overwrite, but relying solely on the
+    // storage backend's own key canonicalization to prevent an escape was an unverified assumption,
+    // not a guarantee — stripping path separators and control characters here removes that
+    // assumption instead of documenting around it.
+    private static string SanitizeForObjectKey(string originalFileName)
+    {
+        var name = originalFileName.Replace('\\', '/');
+        var lastSlash = name.LastIndexOf('/');
+        if (lastSlash >= 0) name = name[(lastSlash + 1)..];
+
+        var sanitized = new string(name.Select(c => char.IsControl(c) ? '_' : c).ToArray()).Trim();
+        return string.IsNullOrEmpty(sanitized) ? "documento" : sanitized;
+    }
 
     protected override IEnumerable<object?> GetEqualityComponents()
     {

@@ -39,7 +39,12 @@ public static class DocumentEndpoints
 
         // Internal, service-to-service endpoint consumed by Classification API — see
         // docs/01-architecture/c4-diagrams.md and SDPP.Classification.Infrastructure.DocumentContent.
+        // InternalServiceKeyOnlyFilter (not just RequireAuthorization): no browser client has any
+        // legitimate reason to call this directly, so unlike /download it never accepts a bare user
+        // session — see InternalServiceKeyOnlyFilter's doc comment.
         group.MapGet("/{documentId:guid}/extracted-text", GetExtractedTextAsync)
+            .AllowAnonymous()
+            .AddEndpointFilter<InternalServiceKeyOnlyFilter>()
             .WithName("GetExtractedText")
             .Produces<ExtractedTextResult>();
 
@@ -47,12 +52,13 @@ public static class DocumentEndpoints
         // as a brand-new DocumentVersion linked to documentId via ConvertedFromInstanceId — the
         // original document/version are never modified by this call. See
         // SDPP.Documents.Application.UseCases.CreateSignedVersion.CreateSignedVersionHandler.
-        // Called either mid-request from an authenticated internal recipient's own session, or
-        // relayed by Signature.Api on behalf of an external recipient with no SDPP session — see
-        // the DownloadDocument comment above for why this needs InternalServiceKeyFilter too.
+        // InternalServiceKeyOnlyFilter, not InternalServiceKeyFilter: this must never be reachable
+        // by a bare authenticated session (any logged-in user could otherwise inject a forged
+        // "signed version" — createdByUserId here is trusted precisely because only the Signature
+        // module, which always attaches the internal key, can reach this at all).
         group.MapPost("/{documentId:guid}/signed-version", CreateSignedVersionAsync)
             .AllowAnonymous()
-            .AddEndpointFilter<InternalServiceKeyFilter>()
+            .AddEndpointFilter<InternalServiceKeyOnlyFilter>()
             .DisableAntiforgery()
             .WithName("CreateSignedVersion")
             .Accepts<IFormFile>("multipart/form-data")
@@ -61,9 +67,11 @@ public static class DocumentEndpoints
 
         // Internal, service-to-service endpoint consumed by Signature.Api right after it produces
         // the final signed artifact of a completed envelope. Irreversible — see DocumentInstance.Lock.
+        // InternalServiceKeyOnlyFilter: a bare authenticated session must never be able to lock an
+        // arbitrary document it doesn't own (see InternalServiceKeyOnlyFilter's doc comment).
         group.MapPost("/{documentId:guid}/lock", LockAsync)
             .AllowAnonymous()
-            .AddEndpointFilter<InternalServiceKeyFilter>()
+            .AddEndpointFilter<InternalServiceKeyOnlyFilter>()
             .WithName("LockDocument")
             .Produces<LockDocumentResult>()
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity);

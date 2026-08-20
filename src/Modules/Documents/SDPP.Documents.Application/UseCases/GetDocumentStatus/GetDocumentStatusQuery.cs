@@ -24,13 +24,17 @@ public sealed record GetDocumentStatusQuery(Guid DocumentId) : IQuery<DocumentSt
 /// — this handler enriches its own response by calling Classification.Api server-side, so the
 /// response shape and the frontend that consumes it are completely unchanged.
 /// </summary>
-public sealed class GetDocumentStatusHandler(IDocumentRepository repository, IClassificationClient classificationClient)
+public sealed class GetDocumentStatusHandler(IDocumentRepository repository, IClassificationClient classificationClient, ICurrentActor currentActor)
     : IRequestHandler<GetDocumentStatusQuery, Result<DocumentStatusResult>>
 {
     public async Task<Result<DocumentStatusResult>> Handle(GetDocumentStatusQuery request, CancellationToken cancellationToken)
     {
         var document = await repository.GetByIdAsync(request.DocumentId, cancellationToken);
         if (document is null)
+        {
+            return Result.Failure<DocumentStatusResult>("El documento no existe.", "DOCUMENT_NOT_FOUND");
+        }
+        if (!DocumentAuthorization.CanView(document, currentActor))
         {
             return Result.Failure<DocumentStatusResult>("El documento no existe.", "DOCUMENT_NOT_FOUND");
         }
