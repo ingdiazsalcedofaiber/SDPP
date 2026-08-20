@@ -73,7 +73,7 @@ public sealed class ViewEnvelopeAccessHandler(
         return Result.Success(new EnvelopeAccessView(
             envelope.Id, envelope.Title, envelope.Message, envelope.SourceDocumentId, envelope.Status.ToString(),
             recipient.Id, recipient.Email, recipient.FullName, recipient.Status.ToString(),
-            RequiresOtp: recipient.MatchedUserId is null, RequiresSdppLogin: recipient.MatchedUserId is not null,
+            RequiresOtp: recipient.MatchedUserId is null && !recipient.InPerson, RequiresSdppLogin: recipient.MatchedUserId is not null,
             recipient.MatchedUserId, ConsentAccepted: recipient.ConsentAcceptedAtUtc is not null, fields));
     }
 }

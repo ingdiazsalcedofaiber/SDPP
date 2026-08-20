@@ -96,10 +96,10 @@ public sealed class SignatureEnvelope : AggregateRoot<Guid>
         };
     }
 
-    public EnvelopeRecipient AddRecipient(string email, string fullName, int order)
+    public EnvelopeRecipient AddRecipient(string email, string fullName, int order, bool inPerson = false)
     {
         EnsureDraft();
-        var recipient = EnvelopeRecipient.Create(Id, email, fullName, order);
+        var recipient = EnvelopeRecipient.Create(Id, email, fullName, order, inPerson);
         _recipients.Add(recipient);
         return recipient;
     }

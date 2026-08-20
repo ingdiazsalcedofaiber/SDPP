@@ -7,7 +7,7 @@ namespace SDPP.Signature.Application.UseCases.GetEnvelope;
 
 public sealed record RecipientDetailDto(
     Guid RecipientId, int Order, string Email, string FullName, Guid? MatchedUserId, string Status,
-    DateTime? SentAtUtc, DateTime? ViewedAtUtc, DateTime? SignedAtUtc, DateTime? DeclinedAtUtc, string? DeclineReason);
+    DateTime? SentAtUtc, DateTime? ViewedAtUtc, DateTime? SignedAtUtc, DateTime? DeclinedAtUtc, string? DeclineReason, bool InPerson);
 
 public sealed record FieldDetailDto(
     Guid FieldId, Guid RecipientId, FieldType Type, int PageNumber,
@@ -44,7 +44,7 @@ public sealed class GetEnvelopeHandler(
         var recipients = envelope.Recipients
             .Select(r => new RecipientDetailDto(
                 r.Id, r.Order, r.Email, r.FullName, r.MatchedUserId, r.Status.ToString(),
-                r.SentAtUtc, r.ViewedAtUtc, r.SignedAtUtc, r.DeclinedAtUtc, r.DeclineReason))
+                r.SentAtUtc, r.ViewedAtUtc, r.SignedAtUtc, r.DeclinedAtUtc, r.DeclineReason, r.InPerson))
             .ToList();
 
         var fields = envelope.Fields

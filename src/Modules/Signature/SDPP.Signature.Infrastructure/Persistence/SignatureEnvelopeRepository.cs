@@ -20,13 +20,19 @@ public sealed class SignatureEnvelopeRepository(SignatureDbContext dbContext) : 
 
     public async Task<IReadOnlyList<SignatureEnvelope>> SearchAsync(Guid userId, string scope, Guid organizationId, CancellationToken cancellationToken = default)
     {
+        // "pending" also covers a creator's own unfinished firma-rápida (InPerson) sessions — those
+        // never match `r.MatchedUserId == userId` (the patient has no SDPP account), so without this
+        // second clause they'd only ever show up under "sent"/"all", never in the "cosas que tengo
+        // pendientes" tab the way a matched-recipient turn does. See ListEnvelopesHandler for how the
+        // two cases get told apart again once they're both in the result set.
         var query = Query().Where(e => e.OrganizationId == organizationId);
         query = scope switch
         {
             "sent" => query.Where(e => e.CreatedByUserId == userId),
             "pending" => query.Where(e =>
                 !TerminalStatuses.Contains(e.Status) &&
-                e.Recipients.Any(r => r.MatchedUserId == userId && ActionableRecipientStatuses.Contains(r.Status))),
+                (e.Recipients.Any(r => r.MatchedUserId == userId && ActionableRecipientStatuses.Contains(r.Status)) ||
+                 (e.CreatedByUserId == userId && e.Recipients.Any(r => r.InPerson && ActionableRecipientStatuses.Contains(r.Status))))),
             _ => query.Where(e =>
                 e.CreatedByUserId == userId ||
                 (!TerminalStatuses.Contains(e.Status) && e.Recipients.Any(r => r.MatchedUserId == userId && ActionableRecipientStatuses.Contains(r.Status)))),

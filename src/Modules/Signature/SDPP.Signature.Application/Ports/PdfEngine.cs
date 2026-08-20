@@ -15,6 +15,10 @@ public sealed record ResolvedField(
 public sealed record CertificateRecipientSummary(
     string FullName, string Email, string? AuthMethodUsed,
     DateTime? SentAtUtc, DateTime? ViewedAtUtc, string? ViewedIpAddress, DateTime? SignedAtUtc, string? SignedIpAddress,
+    // Firma presencial (see EnvelopeRecipient.InPerson): no envelope was ever actually dispatched
+    // anywhere, so the certificate's first timeline row is relabeled from "Enviado" to "Firma
+    // presencial" for these — see PdfSharpEnvelopeEmbeddingEngine.DrawCertificatePage.
+    bool InPerson,
     // Singular — the ONE representative field's hash (same field as SignatureImage below), matching
     // the short hash caption stamped on the document page directly under that signature/initials
     // image (see PdfSharpEnvelopeEmbeddingEngine.DrawSignatureCaption) — deliberately NOT

@@ -21,14 +21,36 @@ public sealed class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpE
 {
     private static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(8)];
 
-    public async Task SendAsync(string toEmail, string subject, string body, CancellationToken cancellationToken = default)
+    public async Task SendAsync(
+        string toEmail, string subject, string body,
+        IReadOnlyList<EmailAttachment>? attachments = null, CancellationToken cancellationToken = default)
     {
         var smtp = options.Value;
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress(smtp.FromName, smtp.FromAddress));
         message.To.Add(MailboxAddress.Parse(toEmail));
         message.Subject = subject;
-        message.Body = new TextPart("html") { Text = body };
+
+        var bodyPart = new TextPart("html") { Text = body };
+        if (attachments is { Count: > 0 })
+        {
+            var multipart = new Multipart("mixed") { bodyPart };
+            foreach (var attachment in attachments)
+            {
+                multipart.Add(new MimePart(attachment.ContentType)
+                {
+                    Content = new MimeContent(new MemoryStream(attachment.Content)),
+                    ContentDisposition = new ContentDisposition(ContentDisposition.Attachment),
+                    ContentTransferEncoding = ContentEncoding.Base64,
+                    FileName = attachment.FileName,
+                });
+            }
+            message.Body = multipart;
+        }
+        else
+        {
+            message.Body = bodyPart;
+        }
 
         for (var attempt = 0; ; attempt++)
         {

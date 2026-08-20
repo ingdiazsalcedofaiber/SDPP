@@ -23,6 +23,7 @@ public sealed class EnvelopeRecipientConfiguration : IEntityTypeConfiguration<En
         builder.Property(r => r.ConsentIpAddress).HasMaxLength(64);
         builder.Property(r => r.ConsentUserAgent).HasMaxLength(500);
         builder.Property(r => r.ReminderCount).IsRequired();
+        builder.Property(r => r.InPerson).IsRequired().HasDefaultValue(false);
 
         builder.HasIndex(r => r.MatchedUserId);
     }

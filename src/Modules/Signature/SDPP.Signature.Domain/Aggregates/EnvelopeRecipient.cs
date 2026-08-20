@@ -24,6 +24,15 @@ public sealed class EnvelopeRecipient : Entity<Guid>
     /// no SDPP account and must sign as an external party.</summary>
     public Guid? MatchedUserId { get; private set; }
 
+    /// <summary>Front-desk "sign right now, on this device" mode — the staff member has already
+    /// verified the signer's identity in person, so the usual email-OTP round trip (which would
+    /// otherwise apply to any MatchedUserId-null recipient) is skipped entirely; the raw access-link
+    /// token itself is treated as sufficient (see RecipientAccessAuthorization.CanAct). Email is
+    /// still required and still used — just for delivering the completion certificate afterward
+    /// (CompleteRecipientSigningHandler), not for identity verification. Defaults to false so every
+    /// existing/remote envelope keeps behaving exactly as before.</summary>
+    public bool InPerson { get; private set; }
+
     public RecipientStatus Status { get; private set; }
     public DateTime? SentAtUtc { get; private set; }
     public DateTime? ViewedAtUtc { get; private set; }
@@ -54,7 +63,7 @@ public sealed class EnvelopeRecipient : Entity<Guid>
 
     private EnvelopeRecipient() { } // EF Core
 
-    internal static EnvelopeRecipient Create(Guid envelopeId, string email, string fullName, int order)
+    internal static EnvelopeRecipient Create(Guid envelopeId, string email, string fullName, int order, bool inPerson = false)
     {
         if (string.IsNullOrWhiteSpace(email))
         {
@@ -69,6 +78,7 @@ public sealed class EnvelopeRecipient : Entity<Guid>
             FullName = string.IsNullOrWhiteSpace(fullName) ? email.Trim() : fullName.Trim(),
             Order = order,
             Status = RecipientStatus.Pending,
+            InPerson = inPerson,
         };
     }
 

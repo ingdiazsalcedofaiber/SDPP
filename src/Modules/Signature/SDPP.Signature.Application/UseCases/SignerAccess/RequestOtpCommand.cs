@@ -45,6 +45,11 @@ public sealed class RequestOtpHandler(
             return Result.Failure<RequestOtpResult>(
                 "Este firmante tiene una cuenta SDPP y debe iniciar sesión en la plataforma en vez de usar un código.", "OTP_NOT_APPLICABLE");
         }
+        if (recipient.InPerson)
+        {
+            return Result.Failure<RequestOtpResult>(
+                "Este firmante firma de forma presencial y no necesita código.", "OTP_NOT_APPLICABLE");
+        }
 
         var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
         var codeHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(code)));

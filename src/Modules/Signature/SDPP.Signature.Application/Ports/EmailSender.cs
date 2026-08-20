@@ -7,7 +7,11 @@ namespace SDPP.Signature.Application.Ports;
 /// swallowed. Swapping in a real SMTP-backed IEmailSender (e.g. MailKit) once credentials exist
 /// means changing ONLY that one implementation — every caller here stays the same.
 /// </summary>
+public sealed record EmailAttachment(string FileName, byte[] Content, string ContentType);
+
 public interface IEmailSender
 {
-    Task SendAsync(string toEmail, string subject, string body, CancellationToken cancellationToken = default);
+    Task SendAsync(
+        string toEmail, string subject, string body,
+        IReadOnlyList<EmailAttachment>? attachments = null, CancellationToken cancellationToken = default);
 }

@@ -668,7 +668,7 @@ public sealed class PdfSharpEnvelopeEmbeddingEngine(ILogger<PdfSharpEnvelopeEmbe
                 rowY += lineHeight;
             }
 
-            DrawTimelineRow("Enviado", recipient.SentAtUtc, null);
+            DrawTimelineRow(recipient.InPerson ? "Firma presencial" : "Enviado", recipient.SentAtUtc, null);
             DrawTimelineRow("Visto", recipient.ViewedAtUtc, recipient.ViewedIpAddress);
             DrawTimelineRow("Firmado", recipient.SignedAtUtc, recipient.SignedIpAddress);
 

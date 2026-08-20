@@ -8,10 +8,13 @@ namespace SDPP.Signature.Infrastructure.Notifications;
 /// See IEmailSender's doc comment.</summary>
 public sealed class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : IEmailSender
 {
-    public Task SendAsync(string toEmail, string subject, string body, CancellationToken cancellationToken = default)
+    public Task SendAsync(
+        string toEmail, string subject, string body,
+        IReadOnlyList<EmailAttachment>? attachments = null, CancellationToken cancellationToken = default)
     {
         logger.LogInformation(
-            "EMAIL NO ENVIADO (sin proveedor SMTP configurado) — Para: {ToEmail}, Asunto: {Subject}", toEmail, subject);
+            "EMAIL NO ENVIADO (sin proveedor SMTP configurado) — Para: {ToEmail}, Asunto: {Subject}, Adjuntos: {AttachmentCount}",
+            toEmail, subject, attachments?.Count ?? 0);
         return Task.CompletedTask;
     }
 }

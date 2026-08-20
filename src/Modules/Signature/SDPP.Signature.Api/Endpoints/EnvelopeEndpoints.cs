@@ -44,7 +44,7 @@ public static class EnvelopeEndpoints
     }
 
     private sealed record CreateEnvelopeBody(Guid SourceDocumentId, string Title, string? Message, SigningMode SigningMode, DateTime? DueDateUtc);
-    private sealed record AddRecipientBody(string Email, string FullName, int Order);
+    private sealed record AddRecipientBody(string Email, string FullName, int Order, bool InPerson = false);
     private sealed record AddFieldBody(Guid RecipientId, FieldType Type, int PageNumber, double PositionX, double PositionY, double Width, double Height, bool Required);
     private sealed record UpdateFieldBody(double PositionX, double PositionY, double Width, double Height);
 
@@ -87,7 +87,7 @@ public static class EnvelopeEndpoints
     private static async Task<IResult> AddRecipientAsync(
         [FromRoute] Guid envelopeId, [FromBody] AddRecipientBody body, ISender sender, CancellationToken cancellationToken)
     {
-        var result = await sender.Send(new AddRecipientCommand(envelopeId, body.Email, body.FullName, body.Order), cancellationToken);
+        var result = await sender.Send(new AddRecipientCommand(envelopeId, body.Email, body.FullName, body.Order, body.InPerson), cancellationToken);
         return result.IsSuccess
             ? Results.Created($"/api/v1/signature/envelopes/{envelopeId}", result.Value)
             : Results.UnprocessableEntity(new ProblemDetails { Title = result.Error, Detail = result.ErrorCode });

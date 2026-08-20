@@ -34,7 +34,7 @@
         "FooterTemplate": "SDPP · Privada · {user} · {date} · Auditoría {auditId}"
       },
       "Confidencial": {
-        "ApplyWatermark": true,
+        "ApplyWatermark": false,
         "ApplyFooter": true,
         "ApplyHeader": false,
         "EmbedMetadata": true,
@@ -47,7 +47,7 @@
         "Watermark": { "ColorHex": "#C00000", "Opacity": 0.16, "FontSize": 22, "AngleDegrees": -45 }
       },
       "Restringida": {
-        "ApplyWatermark": true,
+        "ApplyWatermark": false,
         "ApplyFooter": true,
         "ApplyHeader": true,
         "EmbedMetadata": true,
@@ -61,7 +61,7 @@
         "Watermark": { "ColorHex": "#C00000", "Opacity": 0.20, "FontSize": 24, "AngleDegrees": -45 }
       },
       "Secreta": {
-        "ApplyWatermark": true,
+        "ApplyWatermark": false,
         "ApplyFooter": true,
         "ApplyHeader": true,
         "EmbedMetadata": true,

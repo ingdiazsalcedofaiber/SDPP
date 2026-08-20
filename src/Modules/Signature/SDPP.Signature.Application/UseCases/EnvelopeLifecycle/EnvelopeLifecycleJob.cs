@@ -73,7 +73,7 @@ public sealed class EnvelopeLifecycleJob(
                 await emailSender.SendAsync(
                     recipient.Email, $"Recordatorio: firma pendiente — {envelope.Title}",
                     $"Tienes un documento pendiente de firma: \"{envelope.Title}\". Verifica el estado en {link}.",
-                    cancellationToken);
+                    cancellationToken: cancellationToken);
 
                 if (recipient.MatchedUserId is { } matchedUserId)
                 {

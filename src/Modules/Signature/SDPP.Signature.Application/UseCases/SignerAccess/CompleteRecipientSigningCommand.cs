@@ -36,7 +36,8 @@ public sealed class CompleteRecipientSigningHandler(
     ICurrentActor currentActor,
     IIntegrationEventPublisher integrationEventPublisher,
     INotificationRepository notificationRepository,
-    ILegalApprovalStampPolicy legalApprovalStampPolicy)
+    ILegalApprovalStampPolicy legalApprovalStampPolicy,
+    IEmailSender emailSender)
     : IRequestHandler<CompleteRecipientSigningCommand, Result<CompleteRecipientSigningResult>>
 {
     private static readonly TimeSpan LinkLifetime = TimeSpan.FromDays(30);
@@ -200,6 +201,7 @@ public sealed class CompleteRecipientSigningHandler(
                         .FirstOrDefault();
                     return new CertificateRecipientSummary(
                         r.FullName, r.Email, r.AuthMethodUsed, r.SentAtUtc, r.ViewedAtUtc, r.ViewedIpAddress, r.SignedAtUtc, r.SignedIpAddress,
+                        r.InPerson,
                         representativeField?.SignatureHash, representativeField?.SignatureImage,
                         cryptographicSignature?.Id, cryptographicSignature is null ? null : "ECDSA P-256 (atestación de plataforma SDPP)");
                 })
@@ -255,6 +257,11 @@ public sealed class CompleteRecipientSigningHandler(
                     cancellationToken);
             }
 
+            if (certificateBytes is not null)
+            {
+                await EmailCertificateToRecipientsAsync(envelope, certificateBytes, verificationUrl, cancellationToken);
+            }
+
             return uploadResult.DocumentId;
         }
         finally
@@ -262,6 +269,36 @@ public sealed class CompleteRecipientSigningHandler(
             TryDelete(inputPath);
             if (embeddedPath is not null) TryDelete(embeddedPath);
             if (certificatePath is not null) TryDelete(certificatePath);
+        }
+    }
+
+    /// <summary>Best-effort — a delivery failure here must never fail (or roll back) an envelope
+    /// completion that already succeeded and is already saved; SmtpEmailSender/LoggingEmailSender
+    /// each log their own outcome per attempt (see their doc comments), so a bare try/catch here is
+    /// enough for this method to not need its own logger. Sent to every recipient (in-person and
+    /// remote alike) — the certificate email is how a front-desk patient with no SDPP account gets
+    /// their copy at all, since they never log back into the platform afterward.</summary>
+    private async Task EmailCertificateToRecipientsAsync(
+        SignatureEnvelope envelope, byte[] certificateBytes, string verificationUrl, CancellationToken cancellationToken)
+    {
+        var attachment = new EmailAttachment($"certificado-{envelope.Id}.pdf", certificateBytes, "application/pdf");
+        var body = $"""
+            <p>El documento <strong>"{envelope.Title}"</strong> fue firmado por todas las partes.</p>
+            <p>Adjunto encontrarás el certificado de firma electrónica.</p>
+            <p>También puedes verificarlo en línea en cualquier momento: <a href="{verificationUrl}">{verificationUrl}</a></p>
+            """;
+
+        foreach (var recipient in envelope.Recipients)
+        {
+            try
+            {
+                await emailSender.SendAsync(
+                    recipient.Email, $"Certificado de firma — {envelope.Title}", body, [attachment], cancellationToken);
+            }
+            catch
+            {
+                // Best-effort by design — see the doc comment above.
+            }
         }
     }
 
