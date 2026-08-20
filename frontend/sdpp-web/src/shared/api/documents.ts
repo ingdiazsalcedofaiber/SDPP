@@ -45,14 +45,25 @@ export async function getDocumentBlob(documentId: string): Promise<Blob> {
   return blob;
 }
 
-export async function downloadDocument(documentId: string, fallbackFileName: string): Promise<void> {
+/** customFileName, when given, replaces just the base name — the extension always comes from what
+ * the server actually produced (fileName's, falling back to fallbackFileName's), never from
+ * whatever the caller typed, so renaming can't accidentally mislabel the file's real format. */
+export async function downloadDocument(documentId: string, fallbackFileName: string, customFileName?: string): Promise<void> {
   const { blob, fileName } = await apiClient.getBlob(`/api/v1/documents/${documentId}/download`);
+  const resolvedName = fileName ?? fallbackFileName;
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = fileName ?? fallbackFileName;
+  link.download = customFileName?.trim() ? withExtensionOf(customFileName.trim(), resolvedName) : resolvedName;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function withExtensionOf(desiredBaseName: string, sourceFileName: string): string {
+  const extensionMatch = sourceFileName.match(/\.[^./\\]+$/);
+  const extension = extensionMatch?.[0] ?? "";
+  const desiredBaseWithoutExtension = desiredBaseName.replace(/\.[^./\\]+$/, "");
+  return `${desiredBaseWithoutExtension}${extension}`;
 }

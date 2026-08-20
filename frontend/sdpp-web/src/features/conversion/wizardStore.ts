@@ -10,6 +10,10 @@ function resolve<T>(value: Updater<T>, prev: T): T {
 interface ConversionWizardState {
   activeStep: number;
   file: File | null;
+  // User-chosen base name (no extension) for the converted output, or "" to keep whatever name the
+  // server produces — see downloadDocument's customFileName param. Lives here, not local useState,
+  // for the same reason as everything else in this store: the wizard can survive a route change.
+  outputFileName: string;
   additionalFiles: File[];
   operationType: OperationType;
   operationParams: Record<string, string>;
@@ -21,6 +25,7 @@ interface ConversionWizardState {
   queuedIntentId: string | null;
   setActiveStep: (value: number) => void;
   setFile: (value: File | null) => void;
+  setOutputFileName: (value: string) => void;
   setAdditionalFiles: (value: Updater<File[]>) => void;
   setOperationType: (value: OperationType) => void;
   setOperationParams: (value: Updater<Record<string, string>>) => void;
@@ -33,6 +38,7 @@ interface ConversionWizardState {
 const initialState = {
   activeStep: 0,
   file: null as File | null,
+  outputFileName: "",
   additionalFiles: [] as File[],
   operationType: "WordToPdf" as OperationType,
   operationParams: {} as Record<string, string>,
@@ -53,6 +59,7 @@ export const useConversionWizardStore = create<ConversionWizardState>((set) => (
   ...initialState,
   setActiveStep: (value) => set({ activeStep: value }),
   setFile: (value) => set({ file: value }),
+  setOutputFileName: (value) => set({ outputFileName: value }),
   setAdditionalFiles: (value) => set((state) => ({ additionalFiles: resolve(value, state.additionalFiles) })),
   setOperationType: (value) => set({ operationType: value }),
   setOperationParams: (value) => set((state) => ({ operationParams: resolve(value, state.operationParams) })),

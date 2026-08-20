@@ -149,6 +149,8 @@ export function ConvertWizardPage() {
   const setActiveStep = useConversionWizardStore((s) => s.setActiveStep);
   const file = useConversionWizardStore((s) => s.file);
   const setFile = useConversionWizardStore((s) => s.setFile);
+  const outputFileName = useConversionWizardStore((s) => s.outputFileName);
+  const setOutputFileName = useConversionWizardStore((s) => s.setOutputFileName);
   const additionalFiles = useConversionWizardStore((s) => s.additionalFiles);
   const setAdditionalFiles = useConversionWizardStore((s) => s.setAdditionalFiles);
   const operationType = useConversionWizardStore((s) => s.operationType);
@@ -332,6 +334,18 @@ export function ConvertWizardPage() {
             <input type="file" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
           </Button>
 
+          {file && (
+            <TextField
+              label="Nombre del archivo resultante (opcional)"
+              value={outputFileName}
+              onChange={(e) => setOutputFileName(e.target.value)}
+              placeholder={file.name.replace(/\.[^./\\]+$/, "")}
+              helperText="Déjalo en blanco para conservar el nombre original — la extensión se ajusta sola según la conversión."
+              fullWidth
+              sx={{ mb: 2 }}
+            />
+          )}
+
           {isMerge && (
             <Box sx={{ mb: 2 }}>
               <Button component="label" variant="outlined" sx={{ mb: 1 }}>
@@ -443,7 +457,7 @@ export function ConvertWizardPage() {
                     <Button
                       color="inherit"
                       size="small"
-                      onClick={() => downloadDocument(currentJob.outputDocumentId!, "documento-convertido")}
+                      onClick={() => downloadDocument(currentJob.outputDocumentId!, "documento-convertido", outputFileName)}
                     >
                       Descargar
                     </Button>
