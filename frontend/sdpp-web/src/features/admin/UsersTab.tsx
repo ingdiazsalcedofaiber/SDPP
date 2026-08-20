@@ -66,7 +66,7 @@ export function UsersTab() {
         <Typography color="error" variant="body2" sx={{ mb: 1 }}>No se pudo actualizar los roles.</Typography>
       )}
 
-      <Paper>
+      <Paper sx={{ overflowX: "auto" }}>
         {usersQuery.isPending ? (
           <Box sx={{ p: 3, display: "flex", justifyContent: "center" }}><CircularProgress size={24} /></Box>
         ) : (
@@ -165,7 +165,7 @@ function UserSessionsPanel({ userId }: { userId: string }) {
   }
 
   return (
-    <Box sx={{ p: 2, bgcolor: "action.hover" }}>
+    <Box sx={{ p: 2, bgcolor: "action.hover", overflowX: "auto" }}>
       <Typography variant="subtitle2" gutterBottom>Sesiones</Typography>
       <Table size="small">
         <TableHead>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -35,6 +35,7 @@ import { FIELD_TYPE_LABELS } from "../../shared/api/signature";
 import { ApiError } from "../../shared/api/client";
 import { BRAND_COLORS } from "../../shared/theme";
 import { SdppLogo } from "../../shared/ui/SdppLogo";
+import { useElementWidth } from "../../shared/hooks/useElementWidth";
 import { useAuthStore } from "../../app/auth";
 import { SignatureMethodDialog } from "./SignatureMethodDialog";
 
@@ -75,6 +76,9 @@ export function EnvelopeSigningPage() {
   const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const viewerRef = useRef<HTMLDivElement | null>(null);
+  const viewerWidth = useElementWidth(viewerRef);
+  const pageWidth = Math.min(BASE_WIDTH, viewerWidth ?? BASE_WIDTH);
   const [completed, setCompleted] = useState<{ envelopeCompleted: boolean } | null>(null);
 
   const accessQuery = useQuery({ queryKey: ["envelope-access", token], queryFn: () => viewEnvelopeAccess(token!), enabled: !!token });
@@ -323,10 +327,10 @@ export function EnvelopeSigningPage() {
                       (65vh) whenever the rendered page is taller than that, which then throws off
                       the percentage-positioned field overlays below (they'd be positioned relative
                       to the clamped box, not the real, visually-overflowing canvas height). */}
-                  <Box sx={{ display: "flex", justifyContent: "center", alignItems: "flex-start", overflow: "auto", maxHeight: "65vh" }}>
+                  <Box ref={viewerRef} sx={{ display: "flex", justifyContent: "center", alignItems: "flex-start", overflow: "auto", maxHeight: "65vh", maxWidth: "100%" }}>
                     <Box sx={{ position: "relative", display: "inline-block", lineHeight: 0, "& canvas": { display: "block" } }}>
                       <Document file={pdfQuery.data}>
-                        <Page pageNumber={currentPage} width={BASE_WIDTH} renderTextLayer renderAnnotationLayer={false} />
+                        <Page pageNumber={currentPage} width={pageWidth} renderTextLayer renderAnnotationLayer={false} />
                       </Document>
                       {fieldsOnCurrentPage.map((f) => (
                         <Box
@@ -359,7 +363,7 @@ export function EnvelopeSigningPage() {
               )}
             </Paper>
 
-            <Paper sx={{ p: 2, width: 320, flexShrink: 0 }}>
+            <Paper sx={{ p: 2, width: { xs: "100%", sm: 320 }, flexShrink: 0 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>Tus campos</Typography>
 
               {view.fields.map((f) => (

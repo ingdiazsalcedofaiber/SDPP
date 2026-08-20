@@ -154,7 +154,7 @@ export function AdminDashboard() {
       </Box>
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1.4fr 1fr" }, gap: 2.5 }}>
-        <Paper>
+        <Paper sx={{ overflowX: "auto" }}>
           <Typography variant="body2" sx={{ fontWeight: 600, p: 2.5, pb: 1 }}>Conversiones recientes (toda la plataforma)</Typography>
           {docsQuery.isPending ? (
             <Box sx={{ p: 3, display: "flex", justifyContent: "center" }}><CircularProgress size={24} /></Box>
@@ -184,7 +184,7 @@ export function AdminDashboard() {
           )}
         </Paper>
 
-        <Paper>
+        <Paper sx={{ overflowX: "auto" }}>
           <Typography variant="body2" sx={{ fontWeight: 600, p: 2.5, pb: 1 }}>Actividad reciente de usuarios</Typography>
           {accessHistoryQuery.isPending ? (
             <Box sx={{ p: 3, display: "flex", justifyContent: "center" }}><CircularProgress size={24} /></Box>

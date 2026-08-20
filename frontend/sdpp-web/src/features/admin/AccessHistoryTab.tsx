@@ -24,9 +24,9 @@ export function AccessHistoryTab() {
 
   return (
     <Box>
-      <TextField label="Filtrar por correo" size="small" value={email} onChange={(e) => setEmail(e.target.value)} sx={{ mb: 2, minWidth: 280 }} />
+      <TextField label="Filtrar por correo" size="small" value={email} onChange={(e) => setEmail(e.target.value)} sx={{ mb: 2, minWidth: { xs: "100%", sm: 280 } }} />
 
-      <Paper>
+      <Paper sx={{ overflowX: "auto" }}>
         {query.isPending ? (
           <Box sx={{ p: 3, display: "flex", justifyContent: "center" }}><CircularProgress size={24} /></Box>
         ) : (

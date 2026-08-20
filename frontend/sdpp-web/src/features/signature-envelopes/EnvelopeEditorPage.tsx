@@ -38,6 +38,7 @@ import { useConnectivityStore } from "../../shared/offline/connectivityStore";
 import { enqueueEnvelope } from "../../shared/offline/enqueue";
 import { processQueue } from "../../shared/offline/queueProcessor";
 import { submitEnvelopeIntent } from "../../shared/offline/submitEnvelopeIntent";
+import { useElementWidth } from "../../shared/hooks/useElementWidth";
 import { useQueueStore } from "../../shared/offline/queueStore";
 import { useEnvelopeEditorStore } from "./envelopeEditorStore";
 import { EditableFieldBox, NewFieldPlacementCatcher } from "./FieldOverlay";
@@ -71,6 +72,9 @@ export function EnvelopeEditorPage() {
   const [newRecipientName, setNewRecipientName] = useState("");
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const pageContainerRef = useRef<HTMLDivElement | null>(null);
+  const viewerRef = useRef<HTMLDivElement | null>(null);
+  const viewerWidth = useElementWidth(viewerRef);
+  const pageWidth = Math.min(BASE_WIDTH, viewerWidth ?? BASE_WIDTH) * scale;
 
   const colorFor = (recipientId: string) => {
     const idx = s.recipients.findIndex((r) => r.recipientId === recipientId);
@@ -271,11 +275,11 @@ export function EnvelopeEditorPage() {
               label="Correo" type="email" size="small" value={newRecipientEmail} onChange={(e) => setNewRecipientEmail(e.target.value)}
               error={newRecipientEmail.trim() !== "" && !isValidEmail(newRecipientEmail)}
               helperText={newRecipientEmail.trim() !== "" && !isValidEmail(newRecipientEmail) ? "Correo inválido" : " "}
-              sx={{ flexGrow: 1, minWidth: 200 }}
+              sx={{ flexGrow: 1, minWidth: { xs: "100%", sm: 200 } }}
             />
             <TextField
               label="Nombre completo" size="small" value={newRecipientName} onChange={(e) => setNewRecipientName(e.target.value)}
-              helperText=" " sx={{ flexGrow: 1, minWidth: 200 }}
+              helperText=" " sx={{ flexGrow: 1, minWidth: { xs: "100%", sm: 200 } }}
             />
             <Button
               variant="outlined" startIcon={<PersonAddIcon />} sx={{ mt: 0.25 }}
@@ -319,10 +323,10 @@ export function EnvelopeEditorPage() {
                 instead of the canvas's real size, corrupting every click-to-fraction calculation
                 once a zoomed page exceeds 70vh (found via a position-precision regression test:
                 identical clicks landed at very different Y fractions zoomed vs. unzoomed). */}
-            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "flex-start", overflow: "auto", maxHeight: "70vh" }}>
+            <Box ref={viewerRef} sx={{ display: "flex", justifyContent: "center", alignItems: "flex-start", overflow: "auto", maxHeight: "70vh", maxWidth: "100%" }}>
               <Box ref={pageContainerRef} sx={{ position: "relative", display: "inline-block", lineHeight: 0, "& canvas": { display: "block" } }}>
                 <Document file={s.file} onLoadSuccess={({ numPages }) => setPageCount(numPages)}>
-                  <Page pageNumber={currentPage} width={BASE_WIDTH * scale} renderTextLayer={false} renderAnnotationLayer={false} />
+                  <Page pageNumber={currentPage} width={pageWidth} renderTextLayer={false} renderAnnotationLayer={false} />
                 </Document>
                 <NewFieldPlacementCatcher pageContainerRef={pageContainerRef} armedType={s.armedFieldType} onPlace={addFieldLocalHandler} />
                 {fieldsOnCurrentPage.map((f) => (
@@ -342,7 +346,7 @@ export function EnvelopeEditorPage() {
             </Box>
           </Paper>
 
-          <Paper sx={{ p: 2, width: 300, flexShrink: 0 }}>
+          <Paper sx={{ p: 2, width: { xs: "100%", sm: 300 }, flexShrink: 0 }}>
             <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>Firmante activo</Typography>
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mb: 2 }}>
               {s.recipients.map((r) => (

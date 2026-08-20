@@ -109,7 +109,7 @@ export function AuditSearchPage() {
           value={hash}
           onChange={(e) => setHash(e.target.value)}
           size="small"
-          sx={{ minWidth: 320 }}
+          sx={{ minWidth: { xs: "100%", sm: 320 } }}
           helperText="Coincidencia exacta — 64 caracteres hexadecimales"
         />
         <TextField label="Document ID" value={documentId} onChange={(e) => setDocumentId(e.target.value)} size="small" disabled={!!hash.trim()} />
@@ -139,7 +139,7 @@ export function AuditSearchPage() {
       )}
 
       {query.data && query.data.items.length > 0 && (
-        <Paper>
+        <Paper sx={{ overflowX: "auto" }}>
           <Table size="small">
             <TableHead>
               <TableRow>

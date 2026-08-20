@@ -1,3 +1,4 @@
+import { useState } from "react";
 import AppBar from "@mui/material/AppBar";
 import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
@@ -16,6 +17,7 @@ import DrawIcon from "@mui/icons-material/Draw";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import LogoutIcon from "@mui/icons-material/Logout";
+import MenuIcon from "@mui/icons-material/Menu";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { logout, useAuthStore } from "./auth";
 import { SdppLogo } from "../shared/ui/SdppLogo";
@@ -44,6 +46,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, hasRole } = useAuthStore();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -55,6 +58,59 @@ export function AppShell() {
   const primaryRole = hasRole("Administrador") ? "Administrador" : hasRole("Auditor") ? "Auditor" : "Usuario";
   const roleAccent = hasRole("Administrador") ? ADMIN_ACCENT : hasRole("Auditor") ? BRAND_COLORS.magenta : BRAND_COLORS.teal;
 
+  // Shared between the permanent (desktop) and temporary (mobile, overlay) drawers below — same
+  // nav list either way, only the Drawer variant/visibility differs per breakpoint. Mobile also
+  // closes the overlay on navigation, since a temporary Drawer is a modal the user expects to
+  // dismiss the moment they act on it (a permanent one has nothing to dismiss).
+  const navList = (
+    <List sx={{ px: 1.5, pt: { xs: 2, md: 3.5 }, pb: 2, display: "flex", flexDirection: "column", gap: 0.5 }}>
+      {NAV_ITEMS.filter((item) => !item.requiresRole || item.requiresRole.some(hasRole))
+        .map((item) => {
+          // Exact match for "/", startsWith for everything else — "/firmar" now has nested
+          // routes (/firmar/nuevo, /firmar/:envelopeId) that should keep the same nav item lit.
+          const selected = item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path);
+          return (
+            <ListItemButton
+              key={item.path}
+              selected={selected}
+              onClick={() => { navigate(item.path); setMobileOpen(false); }}
+              sx={{
+                borderRadius: 2.5,
+                transition: "background-color 0.15s ease, box-shadow 0.15s ease",
+                "&:hover": { bgcolor: "rgba(15, 40, 38, 0.05)" },
+                "&.Mui-selected": {
+                  bgcolor: item.color,
+                  boxShadow: `0 4px 14px ${item.color}55`,
+                  "&:hover": { bgcolor: item.color },
+                  "& .MuiListItemText-primary": { color: "#fff", fontWeight: 700 },
+                },
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 44 }}>
+                <Box
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    bgcolor: selected ? "rgba(255,255,255,0.22)" : `${item.color}1A`,
+                    color: selected ? "#fff" : item.color,
+                    transition: "background-color 0.15s ease, color 0.15s ease",
+                    "& svg": { fontSize: 18 },
+                  }}
+                >
+                  {item.icon}
+                </Box>
+              </ListItemIcon>
+              <ListItemText primary={item.label} />
+            </ListItemButton>
+          );
+        })}
+    </List>
+  );
+
   return (
     <Box sx={{ display: "flex" }}>
       <AppBar
@@ -62,20 +118,36 @@ export function AppShell() {
         color="inherit"
         sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, bgcolor: "#fff" }}
       >
-        <Toolbar sx={{ justifyContent: "space-between", height: TOPBAR_HEIGHT, minHeight: `${TOPBAR_HEIGHT}px !important` }}>
-          <SdppLogo />
+        <Toolbar
+          sx={{
+            justifyContent: "space-between", height: TOPBAR_HEIGHT, minHeight: `${TOPBAR_HEIGHT}px !important`,
+            px: { xs: 1.5, sm: 3 }, gap: 1,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.5, md: 1.5 }, minWidth: 0 }}>
+            {/* Only the mobile/temporary Drawer needs a trigger — the desktop one is always
+                visible, so this button (and the Drawer it opens) simply doesn't exist above "md". */}
+            <IconButton
+              onClick={() => setMobileOpen(true)}
+              sx={{ display: { xs: "inline-flex", md: "none" }, color: BRAND_COLORS.textDark, flexShrink: 0 }}
+              aria-label="Abrir menú"
+            >
+              <MenuIcon />
+            </IconButton>
+            <SdppLogo height={44} />
+          </Box>
           {user && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0, sm: 0.5 }, flexShrink: 0 }}>
               <OfflineQueueIndicator />
               <NotificationBell />
-              <Box sx={{ width: "1px", height: 26, bgcolor: "rgba(15, 40, 38, 0.1)", mx: 0.25 }} />
+              <Box sx={{ width: "1px", height: 26, bgcolor: "rgba(15, 40, 38, 0.1)", mx: 0.25, display: { xs: "none", sm: "block" } }} />
               <Box
                 sx={{
                   display: "flex",
                   alignItems: "center",
                   gap: 1.25,
-                  pl: 0.75,
-                  pr: 1.75,
+                  pl: { xs: 0, sm: 0.75 },
+                  pr: { xs: 0, sm: 1.75 },
                   py: 0.5,
                   borderRadius: 999,
                   transition: "background-color 0.15s ease",
@@ -85,8 +157,8 @@ export function AppShell() {
                 <Avatar
                   src={user.photoUrl ?? undefined}
                   sx={{
-                    width: 38,
-                    height: 38,
+                    width: { xs: 32, sm: 38 },
+                    height: { xs: 32, sm: 38 },
                     bgcolor: roleAccent,
                     border: `2px solid ${roleAccent}`,
                     fontSize: 15,
@@ -95,7 +167,11 @@ export function AppShell() {
                 >
                   {user.fullName.charAt(0)}
                 </Avatar>
-                <Box sx={{ display: "flex", flexDirection: "column" }}>
+                {/* Name/role text is the first thing to go on a phone-width topbar — the avatar
+                    alone (plus the role's own accent color on it) is enough to recognize "it's me,
+                    logged in", and the full detail is one tap away in NotificationBell/logout
+                    anyway. */}
+                <Box sx={{ display: { xs: "none", sm: "flex" }, flexDirection: "column" }}>
                   <Typography variant="body2" sx={{ fontWeight: 600, color: BRAND_COLORS.textDark, lineHeight: 1.3 }}>
                     {user.fullName}
                   </Typography>
@@ -108,7 +184,7 @@ export function AppShell() {
                 </Box>
               </Box>
 
-              <Box sx={{ width: "1px", height: 26, bgcolor: "rgba(15, 40, 38, 0.1)", mx: 0.25 }} />
+              <Box sx={{ width: "1px", height: 26, bgcolor: "rgba(15, 40, 38, 0.1)", mx: 0.25, display: { xs: "none", sm: "block" } }} />
 
               <Tooltip title="Cerrar sesión">
                 <IconButton
@@ -137,64 +213,35 @@ export function AppShell() {
         />
       </AppBar>
 
+      {/* Mobile: an overlay drawer above the content (doesn't take up flex space, so main doesn't
+          need a responsive width/margin adjustment for it). Desktop: the original always-visible
+          sidebar. Exactly one of the two is ever mounted-and-visible at a given breakpoint. */}
+      <Drawer
+        variant="temporary"
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          display: { xs: "block", md: "none" },
+          [`& .MuiDrawer-paper`]: { width: DRAWER_WIDTH, boxSizing: "border-box", bgcolor: "#FBFDFC" },
+        }}
+      >
+        {navList}
+      </Drawer>
       <Drawer
         variant="permanent"
         sx={{
+          display: { xs: "none", md: "block" },
           width: DRAWER_WIDTH,
           flexShrink: 0,
           [`& .MuiDrawer-paper`]: { width: DRAWER_WIDTH, boxSizing: "border-box", bgcolor: "#FBFDFC", borderRight: "1px solid rgba(15, 40, 38, 0.06)" },
         }}
       >
         <Box sx={{ height: TOPBAR_HEIGHT + STRIPE_HEIGHT, flexShrink: 0 }} />
-        <List sx={{ px: 1.5, pt: 3.5, pb: 2, display: "flex", flexDirection: "column", gap: 0.5 }}>
-          {NAV_ITEMS.filter((item) => !item.requiresRole || item.requiresRole.some(hasRole))
-            .map((item) => {
-              // Exact match for "/", startsWith for everything else — "/firmar" now has nested
-              // routes (/firmar/nuevo, /firmar/:envelopeId) that should keep the same nav item lit.
-              const selected = item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path);
-              return (
-                <ListItemButton
-                  key={item.path}
-                  selected={selected}
-                  onClick={() => navigate(item.path)}
-                  sx={{
-                    borderRadius: 2.5,
-                    transition: "background-color 0.15s ease, box-shadow 0.15s ease",
-                    "&:hover": { bgcolor: "rgba(15, 40, 38, 0.05)" },
-                    "&.Mui-selected": {
-                      bgcolor: item.color,
-                      boxShadow: `0 4px 14px ${item.color}55`,
-                      "&:hover": { bgcolor: item.color },
-                      "& .MuiListItemText-primary": { color: "#fff", fontWeight: 700 },
-                    },
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: 44 }}>
-                    <Box
-                      sx={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        bgcolor: selected ? "rgba(255,255,255,0.22)" : `${item.color}1A`,
-                        color: selected ? "#fff" : item.color,
-                        transition: "background-color 0.15s ease, color 0.15s ease",
-                        "& svg": { fontSize: 18 },
-                      }}
-                    >
-                      {item.icon}
-                    </Box>
-                  </ListItemIcon>
-                  <ListItemText primary={item.label} />
-                </ListItemButton>
-              );
-            })}
-        </List>
+        {navList}
       </Drawer>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: { xs: 1.5, sm: 3 } }}>
         <Box sx={{ height: TOPBAR_HEIGHT + STRIPE_HEIGHT, flexShrink: 0 }} />
         <Outlet />
       </Box>

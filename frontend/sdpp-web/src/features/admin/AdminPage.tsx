@@ -19,7 +19,14 @@ export function AdminPage() {
         Administración
       </Typography>
 
-      <Tabs value={tab} onChange={(_, value: number) => setTab(value)} sx={{ mb: 2 }}>
+      <Tabs
+        value={tab}
+        onChange={(_, value: number) => setTab(value)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{ mb: 2 }}
+      >
         <Tab label="Usuarios" />
         <Tab label="Historial de accesos" />
         <Tab label="Dominios permitidos" />

@@ -266,7 +266,7 @@ export function ConvertWizardPage() {
                     {category.title}
                   </Typography>
                 </Box>
-                <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 190px))", gap: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(auto-fill, minmax(130px, 1fr))", sm: "repeat(auto-fill, minmax(150px, 190px))" }, gap: 1.5 }}>
                   {category.operations.map((op) => {
                     const selected = operationType === op.value;
                     return (
@@ -377,7 +377,7 @@ export function ConvertWizardPage() {
           )}
 
           {paramFields.length > 0 && (
-            <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 2, mb: 2 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(auto-fit, minmax(240px, 1fr))" }, gap: 2, mb: 2 }}>
               {paramFields.map((f) => (
                 <TextField
                   key={f.key}

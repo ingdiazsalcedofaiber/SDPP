@@ -192,6 +192,7 @@ export function PersonalDashboard() {
           ) : topContentTypes.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sin documentos todavía.</Typography>
           ) : (
+            <Box sx={{ overflowX: "auto" }}>
             <Table size="small">
               <TableHead>
                 <TableRow>
@@ -215,6 +216,7 @@ export function PersonalDashboard() {
                 ))}
               </TableBody>
             </Table>
+            </Box>
           )}
         </Paper>
 
@@ -230,9 +232,9 @@ export function PersonalDashboard() {
                 data: topContentTypes.map((t, i) => ({ id: i, value: t.count, label: t.label, color: PIE_PALETTE[i % PIE_PALETTE.length] })),
                 arcLabel: "value",
               }]}
-              width={260}
               height={220}
               hideLegend
+              sx={{ maxWidth: "100%" }}
             />
           )}
         </Paper>

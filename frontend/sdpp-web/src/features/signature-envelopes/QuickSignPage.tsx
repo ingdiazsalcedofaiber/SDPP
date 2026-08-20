@@ -17,6 +17,7 @@ import { useNavigate } from "react-router-dom";
 import { ApiError } from "../../shared/api/client";
 import { BRAND_COLORS } from "../../shared/theme";
 import { isValidEmail } from "../../shared/utils/validation";
+import { useElementWidth } from "../../shared/hooks/useElementWidth";
 import { useConnectivityStore } from "../../shared/offline/connectivityStore";
 import { submitEnvelopeIntent } from "../../shared/offline/submitEnvelopeIntent";
 import { EditableFieldBox, NewFieldPlacementCatcher } from "./FieldOverlay";
@@ -50,6 +51,9 @@ export function QuickSignPage() {
   const [pageCount, setPageCount] = useState(0);
   const [fieldRect, setFieldRect] = useState<(FieldRect & { pageNumber: number }) | null>(null);
   const pageContainerRef = useRef<HTMLDivElement | null>(null);
+  const viewerRef = useRef<HTMLDivElement | null>(null);
+  const viewerWidth = useElementWidth(viewerRef);
+  const pageWidth = Math.min(BASE_WIDTH, viewerWidth ?? BASE_WIDTH);
 
   const infoComplete = !!file && isValidEmail(patientEmail) && patientName.trim() !== "";
   const readyToSign = infoComplete && fieldRect !== null;
@@ -141,10 +145,10 @@ export function QuickSignPage() {
               </IconButton>
             </Box>
           )}
-          <Box sx={{ display: "flex", justifyContent: "center" }}>
+          <Box ref={viewerRef} sx={{ display: "flex", justifyContent: "center", overflow: "auto", maxWidth: "100%" }}>
             <Box ref={pageContainerRef} sx={{ position: "relative", display: "inline-block", lineHeight: 0, "& canvas": { display: "block" } }}>
               <Document file={file} onLoadSuccess={({ numPages }) => setPageCount(numPages)}>
-                <Page pageNumber={currentPage} width={BASE_WIDTH} renderTextLayer={false} renderAnnotationLayer={false} />
+                <Page pageNumber={currentPage} width={pageWidth} renderTextLayer={false} renderAnnotationLayer={false} />
               </Document>
               {!fieldRect && (
                 <NewFieldPlacementCatcher

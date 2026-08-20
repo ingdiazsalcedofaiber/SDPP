@@ -74,7 +74,7 @@ export function OfflineQueueIndicator() {
         anchorEl={anchorEl}
         open={!!anchorEl}
         onClose={() => setAnchorEl(null)}
-        slotProps={{ paper: { sx: { width: 380, maxHeight: 460, borderRadius: 3, overflow: "hidden" } }, list: { sx: { p: 0 } } }}
+        slotProps={{ paper: { sx: { width: 380, maxWidth: "calc(100vw - 32px)", maxHeight: 460, borderRadius: 3, overflow: "hidden" } }, list: { sx: { p: 0 } } }}
       >
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2.5, py: 2 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Cola de sincronización</Typography>

@@ -177,7 +177,14 @@ export function SignatureMethodDialog({ open, defaultName, onCancel, onConfirm }
   return (
     <Dialog open={open} onClose={onCancel} maxWidth="md" fullWidth>
       <DialogTitle>Capturar firma</DialogTitle>
-      <Tabs value={tab} onChange={(_e, v) => setTab(v)} sx={{ px: 3 }}>
+      <Tabs
+        value={tab}
+        onChange={(_e, v) => setTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{ px: 3 }}
+      >
         <Tab value="draw" label="Dibujar" />
         <Tab value="type" label="Escribir mi nombre" />
         <Tab value="upload" label="Subir imagen" />

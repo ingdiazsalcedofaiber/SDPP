@@ -58,41 +58,43 @@ function formatDate(value: string | null): string {
  * can render two visually separated tables (see EnvelopeInboxPage) without duplicating markup. */
 function EnvelopeTable({ envelopes, onRowClick }: { envelopes: EnvelopeSummary[]; onRowClick: (envelopeId: string) => void }) {
   return (
-    <Table>
-      <TableHead>
-        <TableRow>
-          <TableCell>Título</TableCell>
-          <TableCell>Estado</TableCell>
-          <TableCell>Modo</TableCell>
-          <TableCell>Firmantes</TableCell>
-          <TableCell>Creado</TableCell>
-          <TableCell>Fecha límite</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {envelopes.map((envelope) => (
-          <TableRow
-            key={envelope.envelopeId}
-            hover
-            sx={{ cursor: "pointer", "& .MuiTableCell-root": { py: 1.75 } }}
-            onClick={() => onRowClick(envelope.envelopeId)}
-          >
-            <TableCell sx={{ fontWeight: 700, color: BRAND_COLORS.teal }}>{envelope.title}</TableCell>
-            <TableCell>
-              <Chip
-                size="small"
-                label={ENVELOPE_STATUS_LABELS[envelope.status]}
-                sx={{ bgcolor: `${STATUS_COLORS[envelope.status]}1A`, color: STATUS_COLORS[envelope.status], fontWeight: 700 }}
-              />
-            </TableCell>
-            <TableCell>{envelope.signingMode === "Sequential" ? "Secuencial" : "Simultánea"}</TableCell>
-            <TableCell>{envelope.signedCount} / {envelope.recipientCount}</TableCell>
-            <TableCell>{formatDate(envelope.createdAtUtc)}</TableCell>
-            <TableCell>{formatDate(envelope.dueDateUtc)}</TableCell>
+    <Box sx={{ overflowX: "auto" }}>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell>Título</TableCell>
+            <TableCell>Estado</TableCell>
+            <TableCell>Modo</TableCell>
+            <TableCell>Firmantes</TableCell>
+            <TableCell>Creado</TableCell>
+            <TableCell>Fecha límite</TableCell>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHead>
+        <TableBody>
+          {envelopes.map((envelope) => (
+            <TableRow
+              key={envelope.envelopeId}
+              hover
+              sx={{ cursor: "pointer", "& .MuiTableCell-root": { py: 1.75 } }}
+              onClick={() => onRowClick(envelope.envelopeId)}
+            >
+              <TableCell sx={{ fontWeight: 700, color: BRAND_COLORS.teal }}>{envelope.title}</TableCell>
+              <TableCell>
+                <Chip
+                  size="small"
+                  label={ENVELOPE_STATUS_LABELS[envelope.status]}
+                  sx={{ bgcolor: `${STATUS_COLORS[envelope.status]}1A`, color: STATUS_COLORS[envelope.status], fontWeight: 700 }}
+                />
+              </TableCell>
+              <TableCell>{envelope.signingMode === "Sequential" ? "Secuencial" : "Simultánea"}</TableCell>
+              <TableCell>{envelope.signedCount} / {envelope.recipientCount}</TableCell>
+              <TableCell>{formatDate(envelope.createdAtUtc)}</TableCell>
+              <TableCell>{formatDate(envelope.dueDateUtc)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
   );
 }
 
@@ -141,12 +143,16 @@ export function EnvelopeInboxPage() {
       <Tabs
         value={scope}
         onChange={(_e, v) => setScope(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
         sx={{
           mb: 2.5,
           minHeight: 0,
           bgcolor: "rgba(15, 40, 38, 0.05)",
           borderRadius: 999,
           p: 0.5,
+          maxWidth: "100%",
           width: "fit-content",
           "& .MuiTabs-indicator": { display: "none" },
           "& .MuiTab-root": {

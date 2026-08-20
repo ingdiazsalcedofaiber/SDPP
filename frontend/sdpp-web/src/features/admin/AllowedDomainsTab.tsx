@@ -54,11 +54,12 @@ export function AllowedDomainsTab() {
         <Box sx={{ display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
           <TextField
             label="Dominio (ej. empresa.com)" size="small" value={newDomain}
-            onChange={(e) => setNewDomain(e.target.value)} sx={{ minWidth: 240 }}
+            onChange={(e) => setNewDomain(e.target.value)} sx={{ minWidth: { xs: "100%", sm: 240 } }}
           />
           <FormControlLabel
             control={<Switch checked={isDevOnly} onChange={(e) => setIsDevOnly(e.target.checked)} />}
             label="Solo desarrollo (ej. cuentas Gmail personales durante pruebas)"
+            sx={{ maxWidth: { xs: "100%", sm: 320 } }}
           />
           <Button variant="contained" disabled={!newDomain.trim() || createMutation.isPending} onClick={() => createMutation.mutate()}>
             Agregar
@@ -67,7 +68,7 @@ export function AllowedDomainsTab() {
         {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
       </Paper>
 
-      <Paper>
+      <Paper sx={{ overflowX: "auto" }}>
         {query.isPending ? (
           <Box sx={{ p: 3, display: "flex", justifyContent: "center" }}><CircularProgress size={24} /></Box>
         ) : (
